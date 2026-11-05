@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Usage Stats",
+    "description": "Per-model daily token usage for the last 30 days, fetched from the OpenCode Console API."
+  }
+}
