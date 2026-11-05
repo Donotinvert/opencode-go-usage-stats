@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: 'dsh-usage-stats',
+  id: 'dsh-opencode-go-usage',
   factory(require) {
     const React = require('react')
     const h = React.createElement

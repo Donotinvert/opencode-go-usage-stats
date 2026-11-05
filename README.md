@@ -1,11 +1,10 @@
 # dsh-opencode-go-usage
 
-DSH 插件「用量统计」。目录 `dsh-opencode-go-usage`，GitHub 仓库
-<https://github.com/Donotinvert/opencode-go-usage-stats>，插件包名仍为 `dsh-usage-stats`
-（profile 的挂载标识与客户端 bundle id，勿改）。
-
-DSH 插件：在**设置**里新增「用量统计」页，直接从 **OpenCode Console 官方接口**拉取最近
+DSH 插件「用量统计」：在**设置**里新增一页，直接从 **OpenCode Console 官方接口**拉取最近
 30 天的**分模型日消耗**（token），覆盖用该 OpenCode Go API Key 的所有客户端流量。
+
+仓库 <https://github.com/Donotinvert/opencode-go-usage-stats>；目录与插件包名均为
+`dsh-opencode-go-usage`（profile 挂载标识与客户端 bundle id）。
 
 ## 它能看什么
 
@@ -32,7 +31,7 @@ Host 半侧按以下顺序解析 OpenCode Go API Key，**Key 不会返回给浏�
 
 ## 安装（已安装到当前 desktop profile）
 
-本机已经完成安装：profile 依赖 `dsh-usage-stats: link:D:/code/dsh-plugin/dsh-opencode-go-usage`，
+本机已经完成安装：profile 依赖 `dsh-opencode-go-usage: link:D:/code/dsh-plugin/dsh-opencode-go-usage`，
 并在 `~/.dsh/profiles/desktop/cordis.patch.yml` 末尾插入了挂载行。HMR 已确认插件生效，
 硬刷新页面即可看到「设置 → 用量统计」。源码目录为 `D:\code\dsh-plugin\dsh-opencode-go-usage`，
 维护约定见同目录的 `AGENTS.md`。
@@ -48,7 +47,7 @@ Host 半侧按以下顺序解析 OpenCode Go API Key，**Key 不会返回给浏�
 # 2) 在 ~/.dsh/profiles/desktop/cordis.patch.yml 末尾追加挂载行
 #    - insert:
 #        - id: usage-stats
-#          name: 'dsh-usage-stats'
+#          name: 'dsh-opencode-go-usage'
 
 # 3) 硬刷新浏览器页面（Ctrl/Cmd+Shift+R），打开 设置 → 用量统计
 ```
@@ -66,7 +65,7 @@ Host 半侧按以下顺序解析 OpenCode Go API Key，**Key 不会返回给浏�
 ## 卸载
 
 1. 删除 `~/.dsh/profiles/desktop/cordis.patch.yml` 末尾的 `usage-stats` insert 行；
-2. 在 profile 目录执行 `pnpm remove dsh-usage-stats`；
+2. 在 profile 目录执行 `pnpm remove dsh-opencode-go-usage`；
 3. 硬刷新页面。`D:\code\dsh-plugin\dsh-opencode-go-usage` 源码目录可保留或删除。
 
 ## 已验证 / 未验证
@@ -74,7 +73,7 @@ Host 半侧按以下顺序解析 OpenCode Go API Key，**Key 不会返回给浏�
 - 已验证：Host 半侧 30 天真实数据端到端（`scripts/smoke.mjs`：780.7M tokens / 3,918 次
   请求 / 2 个有消耗的模型，单次拉取 12–27s）；Host 路由 `/usage-stats/api/data` 已注册
   （未认证请求返回本插件的 403 JSON）；Client bundle 已进入模块图并被
-  `/plugins/??dsh-usage-stats/client.js&rev=…` 正常返回（200，含「用量统计」与接口路径）。
+  `/plugins/??dsh-opencode-go-usage/client.js&rev=…` 正常返回（200，含「用量统计」与接口路径）。
 - 未验证：设置页在浏览器中的实际渲染与交互（当前会话没有已认证页面的截图/浏览器控制
   能力）。硬刷新后请打开 设置 → 用量统计 确认；如有报错把页面文字发回即可排查。
 

@@ -1,6 +1,6 @@
 {
-  "name": "dsh-usage-stats",
-  "version": "0.1.0",
+  "name": "dsh-opencode-go-usage",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "OpenCode Go 用量统计：从 Console 官方接口拉取最近 30 天的分模型日消耗",

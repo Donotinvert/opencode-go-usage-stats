@@ -1,5 +1,5 @@
 /**
- * dsh-usage-stats — Host half.
+ * dsh-opencode-go-usage — Host half.
  *
  * Reads OpenCode Go usage from the official Console API (the same data the
  * Console's own charts render) and exposes it to the plugin's settings page
@@ -30,7 +30,7 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-export const name = 'dsh-usage-stats'
+export const name = 'dsh-opencode-go-usage'
 export const inject = ['webServer', 'connection']
 
 const CONSOLE_ORIGIN = 'https://opencode.ai'
@@ -48,7 +48,7 @@ async function consoleFetch(path, key) {
     headers: {
       authorization: `Bearer ${key}`,
       accept: 'application/json',
-      'user-agent': 'dsh-usage-stats/0.1.0',
+      'user-agent': 'dsh-opencode-go-usage/0.2.0',
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
@@ -422,5 +422,5 @@ export function apply(ctx) {
         })
       }
     },
-  }), 'dsh-usage-stats: /usage-stats/api routes')
+  }), 'dsh-opencode-go-usage: /usage-stats/api routes')
 }

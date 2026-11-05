@@ -1,5 +1,5 @@
-# dsh-usage-stats bundle patch: one Host row. The Client half is picked up from
+# dsh-opencode-go-usage bundle patch: one Host row. The Client half is picked up from
 # this package's `dsh.client` declaration by the client module system.
 - insert:
     - id: usage-stats
-      name: 'dsh-usage-stats'
+      name: 'dsh-opencode-go-usage'

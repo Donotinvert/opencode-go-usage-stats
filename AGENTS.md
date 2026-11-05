@@ -2,7 +2,7 @@
 
 DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天的分模型日消耗。
 目录 `dsh-opencode-go-usage`，GitHub 仓库 <https://github.com/Donotinvert/opencode-go-usage-stats>；
-插件包名与客户端 bundle id 仍是 `dsh-usage-stats`（profile 挂载标识，改名会破坏现有安装）。
+插件包名与客户端 bundle id 均为 `dsh-opencode-go-usage`（profile 挂载标识；改名需同步 profile 挂载行并重启 DSH）。
 本文件只记录两类信息：**花大量 token/排障才得到的结论**，以及**简单但做错就会破坏现状的关键点**。
 文件职责与用户安装说明见 `README.md`；不要再往这里添加流程性、常识性或可从代码直接看出的内容。
 
@@ -30,7 +30,7 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - 生效规则：profile 依赖/挂载行变化 → HMR 重新组合；`client.js` 按 mtime 重载（硬刷新）；`index.js` 改动必须重启桌面应用。
 - `dsh` CLI 拒绝操作 desktop profile（"managed exclusively by the Electron application"），`--dump-config` 不可用。安装/重装只能使用桌面自带的 node+pnpm：
   `<安装目录>\resources\runtime\primary-runtime\dependencies\{node\bin\node.exe,pnpm\bin\pnpm.cjs}`，在 profile 目录执行 `add "link:<绝对路径>"`。
-- profile 的 `node_modules/dsh-usage-stats` 是符号链接。**移动插件目录后必须重新 `pnpm add link:<新路径>`**，否则 Host 仍加载旧路径。
+- profile 的 `node_modules/dsh-opencode-go-usage` 是符号链接。**移动插件目录后必须重新 `pnpm add link:<新路径>`**，否则 Host 仍加载旧路径。
 
 ## 二、简单但关键（做错会直接破坏现状）
 
@@ -43,6 +43,6 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - 验证分三层，不得用前两层推断第三层：
   1. `node --check index.js`、`node --check client.js`、`node scripts/smoke.mjs`（真实接口）；
   2. Host：`curl -s $DSH_WEB_URL/usage-stats/api/data` 应返回本插件 403 JSON（404=路由未注册；401=认证层，不代表故障）；
-  3. Client：`curl -sN --max-time 8 $DSH_WEB_URL/plugins/events` 应含 `"id":"dsh-usage-stats"` 的 entry（带 rev），请求其 `plugins/??…` 应 200 且含「用量统计」。
+  3. Client：`curl -sN --max-time 8 $DSH_WEB_URL/plugins/events` 应含 `"id":"dsh-opencode-go-usage"` 的 entry（带 rev），请求其 `plugins/??…` 应 200 且含「用量统计」。
 - 页面真实渲染只能由用户在浏览器确认；汇报完成度时写清停在哪一层。
 - 改数据口径/接口/窗口时，同步更新 `index.js` 注释、`README.md` 与本文件第一节。
