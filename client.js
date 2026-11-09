@@ -103,14 +103,11 @@ window.__ModuleLoader__.load({
 .dsh-us-footbtn[data-wide="false"]{justify-content:center;padding:0}
 .dsh-us-footbtn-icon{display:flex;flex:none}
 .dsh-us-footwrap{display:block;width:100%;min-width:0}
-.dsh-us-quota-card{position:fixed;z-index:1200;display:none;width:232px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2,#3a3a3a);border-radius:12px;background:var(--dsw-alias-bg-layer-2,#2b2b2b);box-shadow:0 16px 48px rgba(0,0,0,.4);color:var(--dsw-alias-label-primary,#f2f2f2);font-size:13px;line-height:1.4}
+.dsh-us-quota-card{position:fixed;z-index:1200;display:none;min-width:168px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l2,#3a3a3a);border-radius:10px;background:var(--dsw-alias-bg-layer-2,#2b2b2b);box-shadow:0 12px 36px rgba(0,0,0,.38);color:var(--dsw-alias-label-primary,#f2f2f2);font-size:12px;line-height:1.5}
 .dsh-us-quota-card[data-open="true"]{display:block}
-.dsh-us-quota-source{color:var(--dsw-alias-label-secondary,#9a9a9a);font-size:12px}
-.dsh-us-quota-divider{height:1px;margin:6px 0;background:var(--dsw-alias-border-l2,#3a3a3a)}
-.dsh-us-quota-line{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:2px 0}
+.dsh-us-quota-line{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:1px 0}
+.dsh-us-quota-line span{color:var(--dsw-alias-label-secondary,#9a9a9a)}
 .dsh-us-quota-line b{font-weight:600;font-variant-numeric:tabular-nums}
-.dsh-us-quota-manage{appearance:none;border:0;background:transparent;color:inherit;font:inherit;font-weight:600;padding:0;cursor:pointer;text-align:left;width:100%}
-.dsh-us-quota-manage:hover{text-decoration:underline}
 .dsh-us-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.3)}
 .dsh-us-modal{display:flex;flex-direction:column;width:min(1000px,94vw);max-height:88vh;border:1px solid var(--dsw-alias-border-l2,#d8dee4);border-radius:14px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:0 24px 80px rgba(0,0,0,.28);overflow:hidden;color:var(--dsw-alias-label-primary,#1f2328)}
 .dsh-us-modalhead{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--dsw-alias-border-l2,#d8dee4)}
@@ -306,13 +303,10 @@ window.__ModuleLoader__.load({
       return Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0
     }
 
-    /** Codex-style English labels for the hover card windows. */
-    const QUOTA_CARD_LABELS = { rolling: '5-hour limit', weekly: 'Weekly limit', monthly: 'Monthly limit' }
-
     /**
-     * The Codex-style usage card shown to the right of the sidebar button on
-     * hover: source line, the three limits as "% left", a divider, and a
-     * "manage" action that opens the dashboard. The plain text tooltip is gone.
+     * Compact quota popover shown to the right of the sidebar button on hover:
+     * three short rows only (label + remaining %). Clicking the icon opens the
+     * full dashboard, so the card carries no source line, dividers or actions.
      */
     function QuotaHoverCard(props) {
       const quota = props.quota
@@ -320,20 +314,15 @@ window.__ModuleLoader__.load({
         const window = quota.windows?.[item.id]
         const left = Math.max(0, Math.round(100 - quotaPercent(quota, item.id)))
         return h('div', { key: item.id, className: 'dsh-us-quota-line' },
-          h('span', null, QUOTA_CARD_LABELS[item.id] ?? item.label),
-          h('b', null, window?.status === 'rate-limited' ? '0% left' : `${left}% left`))
+          h('span', null, item.label),
+          h('b', null, window?.status === 'rate-limited' ? '已用尽' : `剩 ${left}%`))
       })
       return h('div', {
         className: 'dsh-us-quota-card',
         'data-open': props.open ? 'true' : 'false',
         style: props.anchor === undefined ? undefined : { left: `${props.anchor.left}px`, bottom: `${props.anchor.bottom}px` },
         role: 'tooltip',
-      },
-        h('div', { className: 'dsh-us-quota-source' }, 'Usage source: OpenCode Go'),
-        h('div', { className: 'dsh-us-quota-divider' }),
-        rows,
-        h('div', { className: 'dsh-us-quota-divider' }),
-        h('button', { type: 'button', className: 'dsh-us-quota-manage', onClick: props.onManage }, '管理用量'))
+      }, rows)
     }
 
     /**
@@ -734,15 +723,7 @@ window.__ModuleLoader__.load({
       props.wide === false ? null : h('span', null, 'GO 用量')),
       quota === undefined
         ? null
-        : h(QuotaHoverCard, {
-          quota,
-          open: hovered,
-          anchor,
-          onManage: () => {
-            setHovered(false)
-            controller.open()
-          },
-        }))
+        : h(QuotaHoverCard, { quota, open: hovered, anchor }))
     }
 
     function OverlayHost(props) {
