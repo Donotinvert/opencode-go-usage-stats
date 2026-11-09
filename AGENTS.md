@@ -45,7 +45,7 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - 侧栏按钮悬停：右侧弹出极简额度卡 `QuotaHoverCard`（min-width 168px，**不画条形图**）：仅三行 `5 小时 / 每周 / 每月` + `剩 X%`（剩余 = 100 − 已用%），无标题、无分隔线、无操作按钮；点击图标本身打开浮层。不要恢复 `title` 文本 tooltip；卡片用 fixed 定位在按钮右侧（`left = rect.right + 10`，`bottom` 对齐按钮底），以 `data-open` 控制显隐，便于静态渲染断言。
 - 组件结构：`DailyChart`（纯数据 → 柱/轴/明细/图例）+ `UsageBody`（汇总块/口径/图表/告警/额度）+ `QuotaHoverCard`（侧栏悬停卡）；`data.models` 字段是 `totalTokens/...`，`row.byModel` 桶字段是 `total/input/output/cacheRead`，两个访问器 `metricOfModel` 与 `metricOf` 不可混用。数据来源脚注已删除，口径说明改在分项 `title` 提示里。
 - 渲染验证：`node scripts/render-check.mjs`。本机没有可被 Node import 的独立 React（客户端 bundle 从模块表取 React），脚本内自带最小 React 替身（createElement + 4 个 hook）再序列化元素树；断言不得含 `<table>`、必须有两个汇总块与 `dsh-us-avg`、必须有 `dsh-us-seg` 与 Top3+其他、必须有额度三进度条与侧栏四条 `<path>` 半环。fixture 窗口以运行当天 UTC 结尾，日期断言不写死。
-- README 的截图位于 `docs/screenshots/`（`panel.png` 浮层面板、`quota.png` 额度区）；入口、配色或布局变化后同步替换截图，并在 README 保持「功能 / 数据来源与隐私 / 与其它插件配合 / 安装 / 注意事项 / 开发测试」结构。
+- README 的截图位于 `docs/screenshots/`（`panel.png` 浮层面板、`quota.png` 额度区、`hover-card.png` 侧栏悬停卡）；入口、配色或布局变化后同步替换截图，并在 README 保持「功能 / 数据来源与隐私 / 与其它插件配合 / 安装 / 注意事项 / 开发测试」结构。
 
 ### 加载性能与缓存（0.3.0 起，勿破坏）
 
