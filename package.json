@@ -1,10 +1,14 @@
 {
   "name": "dsh-opencode-go-usage",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "OpenCode Go 用量统计：从 Console 官方接口拉取最近 30 天的分模型日消耗",
+  "description": "OpenCode Go 用量统计：从 Console 官方接口拉取最近 30 天的分模型日消耗，以日堆叠柱状图展示",
   "icon": "./icon.svg",
+  "scripts": {
+    "smoke": "node scripts/smoke.mjs",
+    "render-check": "node scripts/render-check.mjs"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

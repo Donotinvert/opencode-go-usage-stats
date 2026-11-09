@@ -21,12 +21,14 @@ DSH 插件「用量统计」：从 **OpenCode Console 官方接口**拉取最近
 
 ## 它能看什么
 
-- 最近 30 天汇总：总 token、输入、输出（含 reasoning）、缓存读、请求数。
-- 按模型汇总：每个模型的 token 构成、请求数和占比。
-- **日 × 模型矩阵**：每天每个模型消耗多少 token，口径可在 总计 / 输入 / 输出 / 缓存读
-  之间切换；超过 10 个模型时其余模型合并为「其他」。
+- **日用量堆叠柱状图**：最近 30 天每天一根柱，柱高为该天所选口径（总计 / 输入 / 输出 /
+  缓存读）的 token 量。
+- 每根柱最多 4 个子项：用量前 3 的模型 + 「其他」（其余模型合计）；Top3 按窗口内总 token
+  排名，切换口径时颜色/名次保持稳定。
+- 悬停任意一根柱子可看当天合计与各模型明细；图例给出各系列总量与占比。
+- 最近 30 天汇总卡：总 token、输入、输出（含 reasoning）、缓存读、请求数。
 - 官方 Go 计费周期（`/activity/go`）的累计 token、请求数和额度消耗（美元）。
-- 空值显示 `-`；每天只在 UTC 日界上聚合（与官网图表一致）。
+- 按 UTC 日聚合（与官网图表一致）。
 
 数据来源：`GET https://opencode.ai/console/api/activity/go` 与
 `GET /console/api/request-logs/export?since=…&until=…&format=json`（逐日请求日志，
@@ -89,13 +91,16 @@ Host 半侧按以下顺序解析 OpenCode Go API Key，**Key 不会返回给浏�
 
 - 已验证：Host 半侧真实 30 天数据端到端（`scripts/smoke.mjs`：约 11.4 亿 tokens / 2 个
   有消耗的模型；首次全量约 4–12 秒，二次读取 0 秒、只命中磁盘缓存）；Host 路由
-  `/usage-stats/api/data` 已注册（未认证请求返回本插件的 403 JSON）；Client bundle 已进入
-  模块图（含侧栏按钮、浮层与新快捷键代码）。
-- 未验证：浏览器中的实际渲染、侧栏按钮/浮层/快捷键交互（当前会话没有已认证页面的截图或
-  浏览器控制能力）。重启 DSH 并硬刷新后请实际点开确认；如有报错把页面文字发回即可排查。
+  `/usage-stats/api/data` 已注册（未认证请求返回本插件的 403 JSON）；客户端渲染用
+  `scripts/render-check.mjs` 验证（17 项断言：柱状图、Top3+其他、图例、悬停明细、
+  无 `<table>`、100 个柱段）。
+- 未验证：浏览器中的实际视觉效果、柱形悬停与点击（当前会话没有已认证页面的截图或浏览器
+  控制能力）。重启 DSH 并硬刷新后请实际打开确认；如有报错把页面文字发回即可排查。
 
 ## 开发
 
 - 修改 `client.js` 后，Client HMR 可按 mtime 重载 bundle，硬刷新页面即可；
 - 修改 `index.js`（Host 半侧）后需重启 DSH 桌面应用才会加载新代码；
-- `node scripts/smoke.mjs` 可单独验证 Host 数据链路。
+- `node scripts/smoke.mjs` 验证 Host 数据链路（真实接口 + 缓存断言）；
+- `node scripts/render-check.mjs` 在无浏览器、无独立 React 的环境下用最小 React 替身渲染
+  三个入口，检查柱状图结构、图例与无表格；真实视觉效果仍需浏览器确认。

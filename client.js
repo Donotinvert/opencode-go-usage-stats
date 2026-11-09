@@ -3,7 +3,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react')
     const h = React.createElement
-    const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React
+    const { useEffect, useMemo, useState, useSyncExternalStore } = React
 
     const METRICS = [
       { id: 'total', label: '总计' },
@@ -11,6 +11,16 @@ window.__ModuleLoader__.load({
       { id: 'output', label: '输出' },
       { id: 'cacheRead', label: '缓存读' },
     ]
+
+    /* Distinct mid-tone hues that read on both the light and dark theme;
+       the first slot follows the host brand color. */
+    const SERIES_COLORS = [
+      'var(--dsw-alias-brand-primary,#4d6bfe)',
+      '#12a594',
+      '#e5484d',
+      'var(--dsw-alias-label-tertiary,#94a3b8)',
+    ]
+    const TOP_MODELS = 3
 
     const CSS = `
 .dsh-us{display:flex;flex-direction:column;gap:16px;color:var(--dsw-alias-label-primary,#1f2328);font-size:13px;line-height:1.5}
@@ -31,27 +41,28 @@ window.__ModuleLoader__.load({
 .dsh-us-meta strong{color:var(--dsw-alias-label-primary,#1f2328);font-weight:600}
 .dsh-us-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .dsh-us-controls-label{color:var(--dsw-alias-label-secondary,#59636e);font-size:12px;margin-right:2px}
-.dsh-us-group{border:.5px solid var(--dsw-alias-settings-card-stroke,#d8dee4);background:var(--dsw-alias-settings-card-fill,#fff);border-radius:12px;overflow:hidden}
-.dsh-us-group-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:.5px solid var(--dsw-alias-border-l2,#d8dee4)}
+.dsh-us-group{border:.5px solid var(--dsw-alias-settings-card-stroke,#d8dee4);background:var(--dsw-alias-settings-card-fill,#fff);border-radius:12px;padding:12px 14px 10px}
+.dsh-us-group-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px}
 .dsh-us-group-title{margin:0;font-size:13px;font-weight:600}
 .dsh-us-group-note{color:var(--dsw-alias-label-tertiary,#818b98);font-size:11px}
-.dsh-us-scroll{overflow:auto;max-height:380px}
-.dsh-us-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-.dsh-us-table th,.dsh-us-table td{padding:7px 12px;border-bottom:.5px solid var(--dsw-alias-border-l2,#d8dee4);white-space:nowrap}
-.dsh-us-table th{color:var(--dsw-alias-label-secondary,#59636e);font-weight:530;font-size:12px;text-align:right;position:sticky;top:0;background:var(--dsw-alias-bg-layer-1,#fff);z-index:1}
-.dsh-us-table th:first-child,.dsh-us-table td:first-child{text-align:left}
-.dsh-us-table td{text-align:right}
-.dsh-us-table tbody tr:last-child td{border-bottom:none}
-.dsh-us-table tbody tr:hover td{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.04))}
-.dsh-us-table tr.dsh-us-total td{font-weight:600;background:var(--dsw-alias-bg-l1,#f6f8fa)}
-.dsh-us-model{display:flex;flex-direction:column;gap:1px}
-.dsh-us-model-name{font-weight:530}
-.dsh-us-model-provider{color:var(--dsw-alias-label-tertiary,#818b98);font-size:11px}
-.dsh-us-bar{display:inline-block;width:64px;height:6px;border-radius:3px;background:var(--dsw-alias-bg-l2,#f6f8fa);overflow:hidden;vertical-align:middle;margin-right:8px}
-.dsh-us-bar>span{display:block;height:100%;border-radius:3px;background:var(--dsw-alias-brand-primary,#4d6bfe)}
-.dsh-us-date{color:var(--dsw-alias-label-secondary,#59636e)}
-.dsh-us-today{color:var(--dsw-alias-brand-primary,#4d6bfe);font-weight:600}
-.dsh-us-zero{color:var(--dsw-alias-label-tertiary,#818b98)}
+.dsh-us-chart{display:flex;align-items:flex-end;gap:3px;height:200px;padding:10px 2px 0}
+.dsh-us-col{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;cursor:default}
+.dsh-us-stack{display:flex;flex-direction:column-reverse;width:100%;height:100%;border-radius:4px 4px 2px 2px;overflow:hidden}
+.dsh-us-col:hover .dsh-us-stack{filter:brightness(1.06)}
+.dsh-us-col-active .dsh-us-stack{outline:1px solid var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:1px}
+.dsh-us-seg{width:100%;min-height:0}
+.dsh-us-seg-empty{width:100%;height:2px;background:var(--dsw-alias-bg-l2,#eef1f4);border-radius:2px}
+.dsh-us-axis{display:flex;gap:3px;padding:4px 2px 0;color:var(--dsw-alias-label-tertiary,#818b98);font-size:10px;height:16px}
+.dsh-us-axis span{flex:1;text-align:center;white-space:nowrap;overflow:visible}
+.dsh-us-readout{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;min-height:20px;padding:8px 2px 0;color:var(--dsw-alias-label-secondary,#59636e);font-size:12px}
+.dsh-us-readout strong{color:var(--dsw-alias-label-primary,#1f2328)}
+.dsh-us-readout-item{display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+.dsh-us-swatch{width:10px;height:10px;border-radius:3px;flex:none;display:inline-block}
+.dsh-us-legend{display:flex;flex-wrap:wrap;gap:8px 18px;padding:10px 2px 0;border-top:.5px solid var(--dsw-alias-border-l2,#d8dee4);margin-top:8px}
+.dsh-us-legend-item{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px}
+.dsh-us-legend-name{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary,#1f2328)}
+.dsh-us-legend-value{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary,#1f2328)}
+.dsh-us-legend-share{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary,#818b98)}
 .dsh-us-empty{padding:24px 14px;text-align:center;color:var(--dsw-alias-label-secondary,#59636e)}
 .dsh-us-error{border:1px solid var(--dsw-alias-state-error-primary,#cf222e);color:var(--dsw-alias-state-error-primary,#cf222e);border-radius:10px;padding:12px 14px;font-size:12px;word-break:break-word}
 .dsh-us-warn{color:var(--dsw-alias-state-warn-label,#9a6700);font-size:12px}
@@ -66,7 +77,6 @@ window.__ModuleLoader__.load({
 .dsh-us-modalhead{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--dsw-alias-border-l2,#d8dee4)}
 .dsh-us-modalhead .dsh-us-head{flex:1;align-items:center}
 .dsh-us-modalbody{padding:16px 18px 20px;overflow:auto}
-.dsh-us-modalbody .dsh-us{font-size:13px}
 `
 
     let numberFormat
@@ -98,6 +108,13 @@ window.__ModuleLoader__.load({
       if (bucket === undefined || bucket === null) return 0
       const field = metric === 'input' ? 'input' : metric === 'output' ? 'output' : metric === 'cacheRead' ? 'cacheRead' : 'total'
       return Number(bucket[field]) || 0
+    }
+
+    /** Same measure as {@link metricOf}, read from a summary model row. */
+    function metricOfModel(model, metric) {
+      if (model === undefined || model === null) return 0
+      const field = metric === 'input' ? 'inputTokens' : metric === 'output' ? 'outputTokens' : metric === 'cacheRead' ? 'cacheReadTokens' : 'totalTokens'
+      return Number(model[field]) || 0
     }
 
     /**
@@ -250,77 +267,91 @@ window.__ModuleLoader__.load({
         }, item.label)))
     }
 
-    function TableSection(props) {
+    /**
+     * Daily stacked bar chart: one bar per UTC day, each bar split into the
+     * period's top three models plus a merged "其他" slice (at most 4 series).
+     * Hovering a bar shows that day's exact breakdown under the chart.
+     */
+    function DailyChart(props) {
+      const { data, metric } = props
+      const [hovered, setHovered] = useState(undefined)
+
+      const layout = useMemo(() => {
+        const ranked = data.models.filter(model => model.totalTokens > 0)
+        const top = ranked.slice(0, TOP_MODELS)
+        const otherModelIds = ranked.slice(TOP_MODELS).map(model => model.id)
+        const series = top.map((model, index) => ({ id: model.id, label: model.id, color: SERIES_COLORS[index] }))
+        if (otherModelIds.length > 0) series.push({ id: '__other__', label: '其他', color: SERIES_COLORS[3] })
+
+        const points = data.daily.map((row) => {
+          const segments = series.map((seriesItem) => {
+            const value = seriesItem.id === '__other__'
+              ? otherModelIds.reduce((sum, id) => sum + metricOf(row.byModel?.[id], metric), 0)
+              : metricOf(row.byModel?.[seriesItem.id], metric)
+            return { id: seriesItem.id, label: seriesItem.label, color: seriesItem.color, value }
+          })
+          const total = segments.reduce((sum, segment) => sum + segment.value, 0)
+          return { date: row.date, segments, total }
+        })
+        const max = Math.max(1, ...points.map(point => point.total))
+        const grand = points.reduce((sum, point) => sum + point.total, 0)
+        const legend = series.map((seriesItem) => {
+          const value = seriesItem.id === '__other__'
+            ? points.reduce((sum, point) => sum + (point.segments.find(segment => segment.id === '__other__')?.value ?? 0), 0)
+            : metricOfModel(data.models.find(model => model.id === seriesItem.id), metric)
+          return { ...seriesItem, value, share: grand === 0 ? 0 : (value / grand) * 100 }
+        })
+        return { points, max, legend }
+      }, [data, metric])
+
+      const activeIndex = hovered === undefined ? layout.points.length - 1 : Math.min(hovered, layout.points.length - 1)
+      const active = layout.points[activeIndex]
+      const metricLabel = METRICS.find(item => item.id === metric)?.label ?? '总计'
+
+      const readout = active === undefined ? null : h('div', { className: 'dsh-us-readout' },
+        h('strong', null, active.date),
+        h('span', null, `合计 ${fullNumber(active.total)}`),
+        active.segments.filter(segment => segment.value > 0).map(segment => h('span', {
+          key: segment.id,
+          className: 'dsh-us-readout-item',
+        },
+        h('i', { className: 'dsh-us-swatch', style: { background: segment.color } }),
+        `${segment.label} ${compactTokens(segment.value)}`)))
+
       return h('div', { className: 'dsh-us-group' },
         h('div', { className: 'dsh-us-group-head' },
-          h('h3', { className: 'dsh-us-group-title' }, props.title),
-          h('span', { className: 'dsh-us-group-note' }, props.note)),
-        h('div', { className: 'dsh-us-scroll' }, props.children))
-    }
-
-    function ModelTable(data) {
-      const head = h('thead', null, h('tr', null, [
-        h('th', { key: 'model' }, '模型'),
-        h('th', { key: 'total' }, '总 Token'),
-        h('th', { key: 'input' }, '输入'),
-        h('th', { key: 'output' }, '输出'),
-        h('th', { key: 'cache' }, '缓存读'),
-        h('th', { key: 'requests' }, '请求'),
-        h('th', { key: 'share' }, '占比'),
-      ]))
-      const rows = data.models.map(model => {
-        const share = data.summary.total === 0 ? 0 : (model.totalTokens / data.summary.total) * 100
-        const providers = model.providers.length === 0 ? null
-          : h('span', { className: 'dsh-us-model-provider' }, model.providers.join(' · '))
-        return h('tr', { key: model.id }, [
-          h('td', { key: 'model' }, h('div', { className: 'dsh-us-model' },
-            h('span', { className: 'dsh-us-model-name' }, model.id), providers)),
-          h('td', { key: 'total', title: fullNumber(model.totalTokens) }, compactTokens(model.totalTokens)),
-          h('td', { key: 'input', title: fullNumber(model.inputTokens) }, compactTokens(model.inputTokens)),
-          h('td', { key: 'output', title: fullNumber(model.outputTokens) }, compactTokens(model.outputTokens)),
-          h('td', { key: 'cache', title: fullNumber(model.cacheReadTokens) }, compactTokens(model.cacheReadTokens)),
-          h('td', { key: 'requests' }, fullNumber(model.requests)),
-          h('td', { key: 'share' },
-            h('span', { className: 'dsh-us-bar' }, h('span', { style: { width: `${Math.max(2, share)}%` } })),
-            `${share.toFixed(1)}%`),
-        ])
-      })
-      const totalRow = h('tr', { className: 'dsh-us-total' }, [
-        h('td', { key: 'model' }, '合计'),
-        h('td', { key: 'total' }, compactTokens(data.summary.total)),
-        h('td', { key: 'input' }, compactTokens(data.summary.input)),
-        h('td', { key: 'output' }, compactTokens(data.summary.output)),
-        h('td', { key: 'cache' }, compactTokens(data.summary.cacheRead)),
-        h('td', { key: 'requests' }, fullNumber(data.summary.requests)),
-        h('td', { key: 'share' }, '100%'),
-      ])
-      return h('table', { className: 'dsh-us-table' }, head, h('tbody', null, [...rows, totalRow]))
-    }
-
-    function MatrixTable(props) {
-      const { data, layout, metric } = props
-      const head = h('thead', null, h('tr', null, [
-        h('th', { key: 'date' }, '日期'),
-        ...layout.columns.map(id => h('th', { key: id }, layout.labelOf(id))),
-        h('th', { key: 'total' }, '合计'),
-      ]))
-      const rows = layout.rows.map(row => {
-        const today = row.date === data.range.to
-        const dateCell = h('td', { key: 'date', className: today ? 'dsh-us-today' : 'dsh-us-date' },
-          today ? `${row.date.slice(5)} · 今天` : row.date.slice(5))
-        const cells = layout.columns.map(id => {
-          const value = layout.valueOf(row, id)
-          return h('td', { key: id, title: fullNumber(value) },
-            value === 0 ? h('span', { className: 'dsh-us-zero' }, '-') : compactTokens(value))
-        })
-        return h('tr', { key: row.date }, [dateCell, ...cells, h('td', { key: 'total' }, compactTokens(metricOf(row.totals, metric)))])
-      })
-      const totalRow = h('tr', { className: 'dsh-us-total' }, [
-        h('td', { key: 'date' }, '合计'),
-        ...layout.columns.map((id, index) => h('td', { key: id }, compactTokens(layout.columnTotals[index]))),
-        h('td', { key: 'total' }, compactTokens(layout.grandTotal)),
-      ])
-      return h('table', { className: 'dsh-us-table' }, head, h('tbody', null, [...rows, totalRow]))
+          h('h3', { className: 'dsh-us-group-title' }, `日用量（${metricLabel}）`),
+          h('span', { className: 'dsh-us-group-note' }, `峰值 ${compactTokens(layout.max)} · Top${TOP_MODELS} 模型 + 其他`)),
+        h('div', { className: 'dsh-us-chart', onMouseLeave: () => setHovered(undefined) },
+          layout.points.map((point, index) => {
+            const segments = point.segments.filter(segment => segment.value > 0)
+            const total = point.total
+            return h('div', {
+              key: point.date,
+              className: `dsh-us-col${index === activeIndex ? ' dsh-us-col-active' : ''}`,
+              onMouseEnter: () => setHovered(index),
+              role: 'img',
+              'aria-label': `${point.date} 合计 ${fullNumber(total)}`,
+            },
+            total === 0
+              ? h('div', { className: 'dsh-us-seg-empty' })
+              : h('div', { className: 'dsh-us-stack' },
+                segments.map(segment => h('div', {
+                  key: segment.id,
+                  className: 'dsh-us-seg',
+                  style: { height: `${(segment.value / layout.max) * 100}%`, background: segment.color },
+                }))))
+          })),
+        h('div', { className: 'dsh-us-axis' },
+          layout.points.map((point, index) => h('span', { key: point.date },
+            index % 5 === 0 || index === layout.points.length - 1 ? point.date.slice(5) : ''))),
+        readout,
+        h('div', { className: 'dsh-us-legend' },
+          layout.legend.map(item => h('span', { key: item.id, className: 'dsh-us-legend-item' },
+            h('i', { className: 'dsh-us-swatch', style: { background: item.color } }),
+            h('span', { className: 'dsh-us-legend-name', title: item.label }, item.label),
+            h('span', { className: 'dsh-us-legend-value' }, compactTokens(item.value)),
+            h('span', { className: 'dsh-us-legend-share' }, `${item.share.toFixed(1)}%`)))))
     }
 
     function Warnings(data) {
@@ -336,7 +367,7 @@ window.__ModuleLoader__.load({
         'Host 端按天缓存：已完成日期直接命中，只有今天（和昨天收尾）会短 TTL 重拉；刷新按钮会强制补拉今天。')
     }
 
-    /** The shared dashboard body: summary, model table and day-by-model matrix. */
+    /** The shared dashboard body: summary, daily stacked chart and legend. */
     function UsageBody(props) {
       const controller = props.controller
       const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
@@ -358,34 +389,8 @@ window.__ModuleLoader__.load({
         controller.ensure(false)
       }, [controller])
 
-      const layout = useMemo(() => {
-        if (data === undefined) return undefined
-        const metric = snapshot.metric
-        const visible = data.models.filter(model => model.totalTokens > 0)
-        const maxColumns = 10
-        const columns = visible.length <= maxColumns
-          ? visible.map(model => model.id)
-          : [...visible.slice(0, maxColumns - 1).map(model => model.id), '__other__']
-        const hidden = new Set(visible.length <= maxColumns ? [] : visible.slice(maxColumns - 1).map(model => model.id))
-        const labelOf = id => (id === '__other__' ? '其他' : id)
-        const valueOf = (row, id) => {
-          if (id !== '__other__') return metricOf(row.byModel?.[id], metric)
-          let sum = 0
-          for (const [modelId, bucket] of Object.entries(row.byModel ?? {})) {
-            if (hidden.has(modelId)) sum += metricOf(bucket, metric)
-          }
-          return sum
-        }
-        const columnTotals = columns.map(id => data.daily.reduce((sum, row) => sum + valueOf(row, id), 0))
-        const grandTotal = data.daily.reduce((sum, row) => sum + metricOf(row.totals, metric), 0)
-        return { columns, labelOf, valueOf, columnTotals, grandTotal, rows: [...data.daily].reverse() }
-      }, [data, snapshot.metric])
-
       if (snapshot.phase === 'error' && data === undefined) {
         return h(ErrorRow, { message: snapshot.error, onRetry: () => { void controller.refresh() } })
-      }
-      if (loading && data === undefined) {
-        return h(LoadingRow, { elapsed })
       }
       if (data === undefined) {
         return h(LoadingRow, { elapsed })
@@ -401,19 +406,8 @@ window.__ModuleLoader__.load({
       if (data.summary.total === 0) {
         parts.push(h('div', { key: 'empty', className: 'dsh-us-group' },
           h('div', { className: 'dsh-us-empty' }, '最近 30 天没有可统计的 Go 推理记录（request-logs 只保留最近 30 天）。')))
-      }
-      parts.push(h(TableSection, {
-        key: 'models',
-        title: '按模型',
-        note: `${data.models.length} 个模型 · 占比按总 token`,
-      }, h(ModelTable, data)))
-      if (layout !== undefined) {
-        const metricLabel = METRICS.find(item => item.id === snapshot.metric)?.label ?? '总计'
-        parts.push(h(TableSection, {
-          key: 'matrix',
-          title: `日 × 模型（${metricLabel}）`,
-          note: '横向滚动查看全部模型 · 空值显示为 -',
-        }, h(MatrixTable, { data, layout, metric: snapshot.metric })))
+      } else {
+        parts.push(h(DailyChart, { key: 'chart', data, metric: snapshot.metric }))
       }
       if (snapshot.refreshing) {
         parts.push(h('div', { key: 'refreshing', className: 'dsh-us-note' }, '正在后台刷新今天的数据…'))

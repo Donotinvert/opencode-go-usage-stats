@@ -34,6 +34,13 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
   `<安装目录>\resources\runtime\primary-runtime\dependencies\{node\bin\node.exe,pnpm\bin\pnpm.cjs}`，在 profile 目录执行 `add "link:<绝对路径>"`。
 - profile 的 `node_modules/dsh-opencode-go-usage` 是符号链接。**移动插件目录后必须重新 `pnpm add link:<新路径>`**，否则 Host 仍加载旧路径。
 
+### 展示结构（0.4.0 起）
+
+- 两张表（按模型表、日×模型矩阵）已被删除，改为「日用量堆叠柱状图」：每天一根柱，Top3 模型 + 「其他」最多 4 个系列；Top3 按窗口 `totalTokens` 排名，跨口径稳定；「其他」聚合第 4 名之后的全部模型。
+- 柱高按所选口径（`total/input/output/cacheRead`）与窗口内单日最大值归一化；柱形悬停显示当天合计与各系列明细；图例显示各系列总量与占比；空值日画 2px 基线。
+- 组件结构：`DailyChart`（纯数据 → 柱/轴/明细/图例）+ `UsageBody`（卡片/口径/图表/告警/脚注）；`data.models` 字段是 `totalTokens/...`，`row.byModel` 桶字段是 `total/input/output/cacheRead`，两个访问器 `metricOfModel` 与 `metricOf` 不可混用。
+- 渲染验证：`node scripts/render-check.mjs`。本机没有可被 Node import 的独立 React（客户端 bundle 从模块表取 React），脚本内自带最小 React 替身（createElement + 4 个 hook）再序列化元素树；断言不得含 `<table>`、必须有 `dsh-us-seg` 与 Top3+其他。
+
 ### 加载性能与缓存（0.3.0 起，勿破坏）
 
 - 冷读 30 天 = 30 次 export（4–12 秒），因此 Host 按天落盘缓存到 `$DSH_HOME/cache/dsh-opencode-go-usage/day-aggregates.v1.json`（存日聚合，不存原始记录，约几十 KB）。
