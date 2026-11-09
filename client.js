@@ -12,8 +12,8 @@ window.__ModuleLoader__.load({
       { id: 'cacheRead', label: '缓存读' },
     ]
 
-    /* Theme-aware series palette: blue/teal/red on light, white/teal/red on
-       dark (see the --dsh-us-series-* blocks in CSS). The first slot also
+    /* Theme-aware series palette: brand-black/teal/red on light, white/teal/red
+       on dark (see the --dsh-us-series-* blocks in CSS). The first slot also
        colours the sidebar ring, so icon and chart always match. */
     const SERIES_COLORS = [
       'var(--dsh-us-series-0,#4d6bfe)',
@@ -33,7 +33,7 @@ window.__ModuleLoader__.load({
     const CSS = `
 .dsh-us{display:flex;flex-direction:column;gap:16px;color:var(--dsw-alias-label-primary,#1f2328);font-size:13px;line-height:1.5}
 .dsh-us *{box-sizing:border-box}
-.dsh-us,.dsh-us-footwrap,.dsh-us-overlay{--dsh-us-series-0:#4d6bfe;--dsh-us-series-1:#0f9d8a;--dsh-us-series-2:#d13438;--dsh-us-series-3:#94a3b8;--dsh-us-quota-ink:#1f2328}
+.dsh-us,.dsh-us-footwrap,.dsh-us-overlay{--dsh-us-series-0:var(--dsw-alias-brand-primary,#1f2328);--dsh-us-series-1:#0f9d8a;--dsh-us-series-2:#d13438;--dsh-us-series-3:#94a3b8;--dsh-us-quota-ink:#1f2328}
 body[data-ds-dark-theme] .dsh-us,body[data-ds-dark-theme] .dsh-us-footwrap,body[data-ds-dark-theme] .dsh-us-overlay{--dsh-us-series-0:var(--dsw-alias-brand-primary,#ffffff);--dsh-us-series-1:#12a594;--dsh-us-series-2:#e5484d;--dsh-us-series-3:var(--dsw-alias-label-tertiary,#94a3b8);--dsh-us-quota-ink:#ffffff}
 .dsh-us-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
 .dsh-us-title{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em}

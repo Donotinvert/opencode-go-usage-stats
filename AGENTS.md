@@ -1,4 +1,7 @@
+# **本代码库为公开代码库，任何涉及隐私信息不得上传**
 # AGENTS.md — dsh-opencode-go-usage
+
+
 
 DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天的分模型日消耗。
 目录 `dsh-opencode-go-usage`，GitHub 仓库 <https://github.com/Donotinvert/opencode-go-usage-stats>；
@@ -47,7 +50,7 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - 渲染验证：`node scripts/render-check.mjs`。本机没有可被 Node import 的独立 React（客户端 bundle 从模块表取 React），脚本内自带最小 React 替身（createElement + 4 个 hook）再序列化元素树；断言不得含 `<table>`、必须有两个汇总块与 `dsh-us-avg`、必须有 `dsh-us-seg` 与 Top3+其他、必须有额度三进度条与侧栏四条 `<path>` 半环。fixture 窗口以运行当天 UTC 结尾，日期断言不写死。
 - README 的截图位于 `docs/screenshots/`（`panel.png` 浮层面板、`quota.png` 额度区、`hover-card.png` 侧栏悬停卡）；入口、配色或布局变化后同步替换截图，并在 README 保持「功能 / 数据来源与隐私 / 与其它插件配合 / 安装 / 注意事项 / 开发测试」结构。
 
-- 主题适配：DSH 深色主题在 `<body>` 上置 `data-ds-dark-theme` 属性，浅色时属性不存在。图表/侧栏环/额度条通过 CSS 变量 `--dsh-us-series-0..3`、`--dsh-us-quota-ink` 在 `.dsh-us` / `.dsh-us-footwrap` / `.dsh-us-overlay` 上切换配色（浅色蓝/青/红 + 深色墨；深色白/青/红 + 白墨）。不要写死单套颜色，也不要依赖 `prefers-color-scheme`（手动主题与系统可能不一致）。
+- 主题适配：DSH 深色主题在 `<body>` 上置 `data-ds-dark-theme` 属性，浅色时属性不存在。图表/侧栏环/额度条通过 CSS 变量 `--dsh-us-series-0..3`、`--dsh-us-quota-ink` 在 `.dsh-us` / `.dsh-us-footwrap` / `.dsh-us-overlay` 上切换配色（浅色首选品牌黑 + 青/红 + 深色墨；深色白/青/红 + 白墨）。不要写死单套颜色，也不要依赖 `prefers-color-scheme`（手动主题与系统可能不一致）。
 
 ### 加载性能与缓存（0.3.0 起，勿破坏）
 
