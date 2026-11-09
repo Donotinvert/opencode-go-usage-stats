@@ -3,7 +3,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react')
     const h = React.createElement
-    const { useEffect, useMemo, useState, useSyncExternalStore } = React
+    const { useEffect, useMemo, useRef, useState, useSyncExternalStore } = React
 
     const METRICS = [
       { id: 'total', label: '总计' },
@@ -102,6 +102,15 @@ window.__ModuleLoader__.load({
 .dsh-us-footbtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.04));color:var(--dsw-alias-label-primary,#1f2328)}
 .dsh-us-footbtn[data-wide="false"]{justify-content:center;padding:0}
 .dsh-us-footbtn-icon{display:flex;flex:none}
+.dsh-us-footwrap{display:block;width:100%;min-width:0}
+.dsh-us-quota-card{position:fixed;z-index:1200;display:none;width:232px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2,#3a3a3a);border-radius:12px;background:var(--dsw-alias-bg-layer-2,#2b2b2b);box-shadow:0 16px 48px rgba(0,0,0,.4);color:var(--dsw-alias-label-primary,#f2f2f2);font-size:13px;line-height:1.4}
+.dsh-us-quota-card[data-open="true"]{display:block}
+.dsh-us-quota-source{color:var(--dsw-alias-label-secondary,#9a9a9a);font-size:12px}
+.dsh-us-quota-divider{height:1px;margin:6px 0;background:var(--dsw-alias-border-l2,#3a3a3a)}
+.dsh-us-quota-line{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:2px 0}
+.dsh-us-quota-line b{font-weight:600;font-variant-numeric:tabular-nums}
+.dsh-us-quota-manage{appearance:none;border:0;background:transparent;color:inherit;font:inherit;font-weight:600;padding:0;cursor:pointer;text-align:left;width:100%}
+.dsh-us-quota-manage:hover{text-decoration:underline}
 .dsh-us-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.3)}
 .dsh-us-modal{display:flex;flex-direction:column;width:min(1000px,94vw);max-height:88vh;border:1px solid var(--dsw-alias-border-l2,#d8dee4);border-radius:14px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:0 24px 80px rgba(0,0,0,.28);overflow:hidden;color:var(--dsw-alias-label-primary,#1f2328)}
 .dsh-us-modalhead{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--dsw-alias-border-l2,#d8dee4)}
@@ -297,14 +306,34 @@ window.__ModuleLoader__.load({
       return Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0
     }
 
-    /** One compact sentence per window, used by the sidebar button tooltip. */
-    function quotaTitle(quota) {
-      if (quota === undefined) return ''
-      return QUOTA_WINDOWS.map(item => {
+    /** Codex-style English labels for the hover card windows. */
+    const QUOTA_CARD_LABELS = { rolling: '5-hour limit', weekly: 'Weekly limit', monthly: 'Monthly limit' }
+
+    /**
+     * The Codex-style usage card shown to the right of the sidebar button on
+     * hover: source line, the three limits as "% left", a divider, and a
+     * "manage" action that opens the dashboard. The plain text tooltip is gone.
+     */
+    function QuotaHoverCard(props) {
+      const quota = props.quota
+      const rows = QUOTA_WINDOWS.map(item => {
         const window = quota.windows?.[item.id]
-        const value = window?.status === 'rate-limited' ? '已用尽' : `已用 ${Math.round(quotaPercent(quota, item.id))}%`
-        return `${item.label}${value}（${formatReset(window?.resetsAt)} 重置）`
-      }).join(' · ')
+        const left = Math.max(0, Math.round(100 - quotaPercent(quota, item.id)))
+        return h('div', { key: item.id, className: 'dsh-us-quota-line' },
+          h('span', null, QUOTA_CARD_LABELS[item.id] ?? item.label),
+          h('b', null, window?.status === 'rate-limited' ? '0% left' : `${left}% left`))
+      })
+      return h('div', {
+        className: 'dsh-us-quota-card',
+        'data-open': props.open ? 'true' : 'false',
+        style: props.anchor === undefined ? undefined : { left: `${props.anchor.left}px`, bottom: `${props.anchor.bottom}px` },
+        role: 'tooltip',
+      },
+        h('div', { className: 'dsh-us-quota-source' }, 'Usage source: OpenCode Go'),
+        h('div', { className: 'dsh-us-quota-divider' }),
+        rows,
+        h('div', { className: 'dsh-us-quota-divider' }),
+        h('button', { type: 'button', className: 'dsh-us-quota-manage', onClick: props.onManage }, '管理用量'))
     }
 
     /**
@@ -666,24 +695,54 @@ window.__ModuleLoader__.load({
     function FooterButton(props) {
       const controller = props.controller
       const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
-      const total = snapshot.data?.summary?.total
       const quota = snapshot.quota
-      const hintParts = ['GO 用量']
-      if (quota !== undefined) hintParts.push(quotaTitle(quota))
-      if (total !== undefined) hintParts.push(`近30天 ${compactTokens(total)} tokens`)
-      const hint = `${hintParts.join(' · ')}（Ctrl+Shift+G）`
-      return h('div', null,
-        h('style', null, CSS),
-        h('button', {
-          type: 'button',
-          className: 'dsh-us-footbtn',
-          'data-wide': props.wide === false ? 'false' : 'true',
-          title: hint,
-          'aria-label': hint,
-          onClick: () => controller.toggle(),
+      const buttonRef = useRef(null)
+      const [anchor, setAnchor] = useState(undefined)
+      const [hovered, setHovered] = useState(false)
+
+      const showCard = () => {
+        const rect = buttonRef.current?.getBoundingClientRect()
+        if (rect !== undefined) {
+          const viewportHeight = typeof window === 'undefined' ? 0 : window.innerHeight
+          setAnchor({ left: Math.round(rect.right + 10), bottom: Math.max(8, Math.round(viewportHeight - rect.bottom)) })
+        }
+        setHovered(true)
+      }
+      const hideCard = () => setHovered(false)
+
+      return h('div', {
+        className: 'dsh-us-footwrap',
+        onMouseEnter: showCard,
+        onMouseLeave: hideCard,
+        onFocus: showCard,
+        onBlur: hideCard,
+      },
+      h('style', null, CSS),
+      h('button', {
+        ref: buttonRef,
+        type: 'button',
+        className: 'dsh-us-footbtn',
+        'data-wide': props.wide === false ? 'false' : 'true',
+        'aria-label': 'GO 用量',
+        'aria-haspopup': 'dialog',
+        onClick: () => {
+          setHovered(false)
+          controller.toggle()
         },
-        h(UsageRing, { quota }),
-        props.wide === false ? null : h('span', null, 'GO 用量')))
+      },
+      h(UsageRing, { quota }),
+      props.wide === false ? null : h('span', null, 'GO 用量')),
+      quota === undefined
+        ? null
+        : h(QuotaHoverCard, {
+          quota,
+          open: hovered,
+          anchor,
+          onManage: () => {
+            setHovered(false)
+            controller.open()
+          },
+        }))
     }
 
     function OverlayHost(props) {

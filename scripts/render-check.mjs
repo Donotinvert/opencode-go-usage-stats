@@ -40,6 +40,12 @@ const fakeReact = {
     return factory()
   },
   useEffect() {},
+  useRef(initial) {
+    const index = hookIndex
+    hookIndex += 1
+    if (!(index in hookQueue)) hookQueue[index] = { current: initial }
+    return hookQueue[index]
+  },
   useSyncExternalStore(_subscribe, getSnapshot) {
     return getSnapshot()
   },
@@ -208,6 +214,14 @@ assert('wide footer shows its label', footerWide.includes('用量'))
 assert('rail footer shrinks to the icon', footerRail.includes('data-wide="false"'))
 assert('footer icon draws two half-ring arcs', [...footerWide.matchAll(/<path/g)].length === 4)
 assert('footer ring uses the chart series color', [...footerWide.matchAll(/<path[^>]*stroke="var\(--dsw-alias-brand-primary,#4d6bfe\)"/g)].length === 4)
+assert('footer no longer uses a text tooltip', !/\stitle="/.test(footerWide))
+const cardMarkup = footerWide.slice(footerWide.indexOf('class="dsh-us-quota-card"'))
+assert('hover card is present but closed by default', footerWide.includes('class="dsh-us-quota-card"') && footerWide.includes('data-open="false"'))
+assert('hover card is compact and has no bar chart', footerWide.includes('width:232px') && !cardMarkup.includes('dsh-us-quota-track'))
+assert('hover card mirrors the codex source line', footerWide.includes('Usage source: OpenCode Go'))
+assert('hover card lists the three limits', footerWide.includes('5-hour limit') && footerWide.includes('Weekly limit') && footerWide.includes('Monthly limit'))
+assert('hover card shows remaining percentages', footerWide.includes('96% left') && footerWide.includes('99% left') && footerWide.includes('79% left'))
+assert('hover card has the manage action', footerWide.includes('管理用量'))
 assert('footer top arc draws the remaining 5-hour quota', footerWide.includes('strokeDasharray="96 100"'))
 assert('footer bottom arc draws the remaining monthly quota', footerWide.includes('strokeDasharray="79 100"'))
 
