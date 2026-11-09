@@ -309,8 +309,10 @@ window.__ModuleLoader__.load({
 
     /**
      * Sidebar icon: two half-rings. The top arc is the 5-hour window and the
-     * bottom arc the monthly window, both filled by their used percentage. The
-     * arcs stop ~18° short of the horizontal so the halves stay readable apart.
+     * bottom arc the monthly window, both filled by the REMAINING percentage —
+     * the same "white = quota left" reading as the quota bars, so a nearly
+     * unused plan draws an almost complete white ring. The arcs stop ~18°
+     * short of the horizontal so the halves stay readable apart.
      */
     function UsageRing(props) {
       const quota = props.quota
@@ -324,7 +326,7 @@ window.__ModuleLoader__.load({
         strokeWidth: 3,
         strokeLinecap: 'round',
         strokeOpacity: track ? .22 : 1,
-        strokeDasharray: track ? undefined : `${quotaPercent(quota, id)} 100`,
+        strokeDasharray: track ? undefined : `${100 - quotaPercent(quota, id)} 100`,
       })
       const top = 'M 3.44 9.22 A 9 9 0 0 1 20.56 9.22'
       const bottom = 'M 3.44 14.78 A 9 9 0 0 0 20.56 14.78'
