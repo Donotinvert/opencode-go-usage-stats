@@ -2,31 +2,34 @@
  * dsh-opencode-go-usage — Host half.
  *
  * Reads OpenCode Go usage from the official Console API (the same data the
- * Console's own charts render) and exposes it to the plugin's settings page
- * through one fenced route:
+ * Console's own charts render) and exposes it to the plugin's UI through one
+ * fenced route:
  *
- *   GET /usage-stats/api/data?days=30[&force=1]
+ *   GET /usage-stats/api/data?days=30[&force=1|&full=1]
  *
- * Why the Console API instead of local session logs: Go plan usage is metered
- * on the Console side, covers every client the key was used from, and the
- * request-log export carries the per-model token fields a model-by-day matrix
- * needs.
+ * Loading model (the user-facing problem this solves): a cold 30-day read is
+ * 30 request-log exports (10–30 seconds). Once a UTC day is over its records are
+ * immutable, so the Host caches each day's aggregate on disk and only refetches
+ * today (and yesterday, briefly) afterwards. The cache is warmed at startup and
+ * refreshed every 10 minutes in the background, so opening the panel normally
+ * hits memory/disk and returns in well under a second.
  *
- * Authentication: the Go API key saved by the harness credentials service
+ *   default   fetch only missing/stale days
+ *   force=1   refresh today (+ yesterday) and keep older days cached
+ *   full=1    refetch the whole window (debugging)
+ *
+ * Auth: the Go API key saved by the harness credentials service
  * (`$DSH_HOME/.credentials.yaml`, refs starting with DSH_OPENCODE_GO_ACCOUNT_*,
  * or a matching environment variable). No key is ever returned to the client.
  *
  * Data shape notes:
- * - Records are bucketed by UTC calendar day (the same boundary the Console's
- *   daily chart uses); `startedAt` is epoch milliseconds.
+ * - Records are bucketed by UTC calendar day (the Console's own daily boundary).
  * - Billed tokens per record: inputTokens + outputTokens + cacheReadTokens +
- *   cacheWriteTokens. reasoningTokens is a subset of outputTokens and is only
- *   reported as a summary figure, never added on top.
- * - Records come from `/request-logs/export` (1,000-record pages). One UTC day
- *   of a personal Go plan never came close to that cap; when it does, the day
- *   is listed in `warnings` so the page can say the number may be short.
+ *   cacheWriteTokens. reasoningTokens is a subset of outputTokens.
+ * - Records come from `/request-logs/export` (1,000-record pages); a day that
+ *   hits the cap is flagged in `warnings`.
  */
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -38,9 +41,16 @@ const CONSOLE_API = '/console/api'
 const DEFAULT_DAYS = 30
 const MAX_DAYS = 30
 const EXPORT_PAGE_LIMIT = 1000
+const LIST_PAGE_LIMIT = 100
+const LIST_MAX_PAGES = 50
 const CONCURRENCY = 6
-const CACHE_TTL_MS = 10 * 60 * 1000
 const REQUEST_TIMEOUT_MS = 30_000
+const CACHE_VERSION = 1
+const CACHE_FILE = 'day-aggregates.v1.json'
+const TODAY_TTL_MS = 10 * 60 * 1000
+const YESTERDAY_TTL_MS = 2 * 60 * 60 * 1000
+const GO_TTL_MS = 60 * 1000
+const WARM_INTERVAL_MS = 10 * 60 * 1000
 
 /** One Console JSON call; non-2xx becomes an error carrying the status. */
 async function consoleFetch(path, key) {
@@ -48,7 +58,7 @@ async function consoleFetch(path, key) {
     headers: {
       authorization: `Bearer ${key}`,
       accept: 'application/json',
-      'user-agent': 'dsh-opencode-go-usage/0.2.0',
+      'user-agent': 'dsh-opencode-go-usage/0.3.0',
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
@@ -70,6 +80,11 @@ async function consoleFetch(path, key) {
 function harnessHome() {
   const configured = process.env.DSH_HOME
   return configured === undefined || configured === '' ? join(homedir(), '.dsh') : configured
+}
+
+/** Directory holding this plugin's persisted day cache. */
+function cacheDirectory() {
+  return join(harnessHome(), 'cache', 'dsh-opencode-go-usage')
 }
 
 /** The saved Go API key from the environment, if one was exported. */
@@ -155,13 +170,42 @@ function addRecord(bucket, record) {
 }
 
 /**
- * Aggregate raw request-log records into the wire shape the settings page reads.
- * Pure: the Host calls it with live records, the smoke test with fixtures.
- * @param days - UTC dates, oldest first.
- * @param itemsByDay - raw Console records per date.
- * @param truncatedDays - dates whose export hit the page cap.
+ * Fold one UTC day of request-log records into its cached aggregate.
+ * Pure, so the cache file and the smoke test share the exact same fold.
+ * @param day - UTC date (`YYYY-MM-DD`).
+ * @param records - raw Console request-log records for that day.
+ * @param truncated - whether the export hit its page cap.
  */
-export function aggregateUsage(days, itemsByDay, truncatedDays = new Set()) {
+export function aggregateDay(day, records, truncated = false) {
+  const totals = emptyBucket()
+  const byModel = {}
+  let reasoning = 0
+  let requests = 0
+  for (const record of records) {
+    const model = typeof record.model === 'string' && record.model !== ''
+      ? record.model
+      : (typeof record.requestedModel === 'string' && record.requestedModel !== '' ? record.requestedModel : undefined)
+    if (model === undefined) continue
+    const bucket = byModel[model] ?? { tokens: emptyBucket(), reasoningTokens: 0, requests: 0, providers: [] }
+    addRecord(bucket.tokens, record)
+    bucket.reasoningTokens += tokenCount(record.reasoningTokens)
+    bucket.requests += 1
+    if (typeof record.provider === 'string' && record.provider !== '' && !bucket.providers.includes(record.provider)) {
+      bucket.providers.push(record.provider)
+    }
+    byModel[model] = bucket
+    addRecord(totals, record)
+    reasoning += tokenCount(record.reasoningTokens)
+    requests += 1
+  }
+  return { date: day, totals, byModel, reasoningTokens: reasoning, requests, truncated, fetchedAt: Date.now() }
+}
+
+/**
+ * Merge per-day aggregates into the wire payload the UI renders.
+ * @param dayAggregates - one aggregate per date, oldest first.
+ */
+export function mergeDayAggregates(dayAggregates) {
   const models = new Map()
   const daily = []
   const warnings = []
@@ -169,48 +213,33 @@ export function aggregateUsage(days, itemsByDay, truncatedDays = new Set()) {
     total: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0,
     requests: 0, models: 0,
   }
-
-  for (const day of days) {
-    const records = itemsByDay.get(day) ?? []
-    const dayTotals = emptyBucket()
+  for (const day of dayAggregates) {
     const byModel = {}
-    for (const record of records) {
-      const model = typeof record.model === 'string' && record.model !== ''
-        ? record.model
-        : (typeof record.requestedModel === 'string' && record.requestedModel !== '' ? record.requestedModel : undefined)
-      if (model === undefined) continue
-      const bucket = models.get(model) ?? {
+    for (const [model, bucket] of Object.entries(day.byModel)) {
+      const existing = models.get(model) ?? {
         id: model,
         providers: new Set(),
         tokens: emptyBucket(),
         reasoningTokens: 0,
         requests: 0,
       }
-      if (typeof record.provider === 'string' && record.provider !== '') bucket.providers.add(record.provider)
-      addRecord(bucket.tokens, record)
-      bucket.reasoningTokens += tokenCount(record.reasoningTokens)
-      bucket.requests += 1
-      models.set(model, bucket)
-
-      const dayBucket = byModel[model] ?? emptyBucket()
-      addRecord(dayBucket, record)
-      byModel[model] = dayBucket
-      addRecord(dayTotals, record)
+      for (const provider of bucket.providers) existing.providers.add(provider)
+      addBucket(existing.tokens, bucket.tokens)
+      existing.reasoningTokens += bucket.reasoningTokens
+      existing.requests += bucket.requests
+      models.set(model, existing)
+      byModel[model] = bucket.tokens
     }
-    daily.push({ date: day, totals: dayTotals, byModel })
-    summary.total += dayTotals.total
-    summary.input += dayTotals.input
-    summary.output += dayTotals.output
-    summary.cacheRead += dayTotals.cacheRead
-    summary.cacheWrite += dayTotals.cacheWrite
+    daily.push({ date: day.date, totals: day.totals, byModel })
+    summary.total += day.totals.total
+    summary.input += day.totals.input
+    summary.output += day.totals.output
+    summary.cacheRead += day.totals.cacheRead
+    summary.cacheWrite += day.totals.cacheWrite
+    summary.requests += day.requests
+    summary.reasoning += day.reasoningTokens
+    if (day.truncated === true) warnings.push(`${day.date} 的请求数达到导出分页上限（${EXPORT_PAGE_LIMIT} 条），该日统计可能偏小。`)
   }
-
-  for (const bucket of models.values()) {
-    summary.reasoning += bucket.reasoningTokens
-    summary.requests += bucket.requests
-  }
-
-  for (const day of truncatedDays) warnings.push(`${day} 的请求数达到导出分页上限（${EXPORT_PAGE_LIMIT} 条），该日统计可能偏小。`)
 
   const modelList = [...models.values()]
     .filter(bucket => bucket.tokens.total > 0)
@@ -229,6 +258,26 @@ export function aggregateUsage(days, itemsByDay, truncatedDays = new Set()) {
 
   summary.models = modelList.length
   return { summary, models: modelList, daily, warnings }
+}
+
+/** Add one token bucket into another (both keep the same five fields). */
+function addBucket(target, source) {
+  target.total += source.total
+  target.input += source.input
+  target.output += source.output
+  target.cacheRead += source.cacheRead
+  target.cacheWrite += source.cacheWrite
+}
+
+/**
+ * Aggregate raw request-log records into the wire shape (kept for the smoke
+ * test's fixture assertions).
+ * @param days - UTC dates, oldest first.
+ * @param itemsByDay - raw Console records per date.
+ * @param truncatedDays - dates whose export hit the page cap.
+ */
+export function aggregateUsage(days, itemsByDay, truncatedDays = new Set()) {
+  return mergeDayAggregates(days.map(day => aggregateDay(day, itemsByDay.get(day) ?? [], truncatedDays.has(day))))
 }
 
 /** Fold the official Go-period chart (`/activity/go`) into summary figures. */
@@ -259,8 +308,76 @@ export function aggregateGoSeries(go) {
   }
 }
 
-/** Fetch one UTC day of request records through the export endpoint. */
-async function fetchDayRecords(day, key) {
+/** Load the persisted day cache; a missing or unreadable file reads as empty. */
+function readDayCache() {
+  try {
+    const parsed = JSON.parse(readFileSync(join(cacheDirectory(), CACHE_FILE), 'utf8'))
+    if (parsed?.version !== CACHE_VERSION || typeof parsed.days !== 'object' || parsed.days === null) return { version: CACHE_VERSION, days: {} }
+    return parsed
+  } catch {
+    return { version: CACHE_VERSION, days: {} }
+  }
+}
+
+/** Persist the day cache atomically; failures only lose the optimization. */
+function writeDayCache(cache) {
+  try {
+    mkdirSync(cacheDirectory(), { recursive: true })
+    const file = join(cacheDirectory(), CACHE_FILE)
+    const temp = `${file}.tmp`
+    writeFileSync(temp, JSON.stringify(cache), 'utf8')
+    renameSync(temp, file)
+  } catch {
+    /* best-effort cache: never break a request over it */
+  }
+}
+
+/** Drop cached days older than the retention window to keep the file small. */
+function pruneDayCache(cache, now = Date.now()) {
+  const oldest = utcDay(now - (MAX_DAYS + 10) * 86_400_000)
+  for (const day of Object.keys(cache.days)) {
+    if (day < oldest) delete cache.days[day]
+  }
+}
+
+/** Whether one cached day aggregate can be reused as-is. */
+function dayIsFresh(aggregate, now = Date.now()) {
+  if (aggregate === undefined || aggregate === null || typeof aggregate.fetchedAt !== 'number') return false
+  const today = utcDay(now)
+  /* A capped day costs many list pages, so keep it cached longer. */
+  const todayTtl = aggregate.truncated === true ? TODAY_TTL_MS * 3 : TODAY_TTL_MS
+  const yesterdayTtl = aggregate.truncated === true ? YESTERDAY_TTL_MS * 3 : YESTERDAY_TTL_MS
+  if (aggregate.date === today) return now - aggregate.fetchedAt < todayTtl
+  const yesterday = utcDay(now - 86_400_000)
+  if (aggregate.date === yesterday) return now - aggregate.fetchedAt < yesterdayTtl
+  return true
+}
+
+/**
+ * Re-read one day through the cursor-paged list endpoint. Used only when the
+ * export endpoint reports a capped day (>1,000 records): the export carries no
+ * continuation cursor, and the list cursor is a raw JSON string, not an object.
+ * @param day - UTC date (`YYYY-MM-DD`).
+ */
+async function fetchDayRecordsViaList(day, key) {
+  const start = Date.parse(`${day}T00:00:00.000Z`)
+  const until = String(start + 86_400_000 - 1)
+  const items = []
+  let cursor
+  for (let page = 0; page < LIST_MAX_PAGES; page += 1) {
+    const query = new URLSearchParams({ since: String(start), until, limit: String(LIST_PAGE_LIMIT) })
+    if (cursor !== undefined) query.set('cursor', cursor)
+    const payload = await consoleFetch(`/request-logs?${query.toString()}`, key)
+    const pageItems = Array.isArray(payload?.items) ? payload.items : []
+    items.push(...pageItems)
+    cursor = typeof payload?.nextCursor === 'string' ? payload.nextCursor : undefined
+    if (cursor === undefined || pageItems.length === 0) return { items, truncated: false }
+  }
+  return { items, truncated: true }
+}
+
+/** Fetch one UTC day of request records and fold it into an aggregate. */
+async function fetchDayAggregate(day, key) {
   const start = Date.parse(`${day}T00:00:00.000Z`)
   const query = new URLSearchParams({
     format: 'json',
@@ -274,7 +391,14 @@ async function fetchDayRecords(day, key) {
       const content = typeof exportPayload?.content === 'string' ? JSON.parse(exportPayload.content) : exportPayload?.content
       const items = Array.isArray(content?.items) ? content.items : []
       const truncated = exportPayload?.truncated === true || content?.truncated === true || items.length >= EXPORT_PAGE_LIMIT
-      return { items, truncated }
+      if (!truncated) return aggregateDay(day, items, false)
+      /* Capped export: continue through the list cursor so a busy day is exact. */
+      try {
+        const full = await fetchDayRecordsViaList(day, key)
+        return aggregateDay(day, full.items, full.truncated)
+      } catch {
+        return aggregateDay(day, items, true)
+      }
     } catch (error) {
       lastError = error
       /* A transient TLS/proxy reset on one day must not sink the whole page. */
@@ -301,29 +425,63 @@ async function mapLimit(values, limit, run) {
 }
 
 /**
- * Collect the full payload the settings page renders.
+ * Collect the full payload the UI renders, reusing the persisted day cache.
  * Exported so the delivery smoke test can run the exact Host path in Node.
  * @param days - window size in days (already clamped).
+ * @param options - `force` refreshes today/yesterday; `full` refetches all.
  */
-export async function collect(days) {
+export async function collect(days, options = {}) {
   const { key, source } = resolveApiKey()
   const list = utcDays(days)
-  const itemsByDay = new Map()
-  const truncatedDays = new Set()
-  const failures = []
+  const cache = readDayCache()
+  const now = Date.now()
+  const force = options.force === true
+  const full = options.full === true
+  const today = utcDay(now)
+  const yesterday = utcDay(now - 86_400_000)
 
-  const results = await mapLimit(list, CONCURRENCY, async (day) => {
+  const wanted = []
+  for (const day of list) {
+    const cached = cache.days[day]
+    if (full) {
+      wanted.push(day)
+      continue
+    }
+    if (force && (day === today || day === yesterday)) {
+      wanted.push(day)
+      continue
+    }
+    if (dayIsFresh(cached, now)) continue
+    wanted.push(day)
+  }
+
+  const failures = []
+  const fetched = new Map()
+  const results = await mapLimit(wanted, CONCURRENCY, async (day) => {
     try {
-      return await fetchDayRecords(day, key)
+      return await fetchDayAggregate(day, key)
     } catch (error) {
       failures.push(`${day}: ${error instanceof Error ? error.message : String(error)}`)
       return undefined
     }
   })
-  results.forEach((result, index) => {
-    if (result === undefined) return
-    itemsByDay.set(list[index], result.items)
-    if (result.truncated) truncatedDays.add(list[index])
+  results.forEach((aggregate) => {
+    if (aggregate === undefined) return
+    fetched.set(aggregate.date, aggregate)
+    cache.days[aggregate.date] = aggregate
+  })
+
+  if (wanted.length > 0) {
+    pruneDayCache(cache, now)
+    writeDayCache(cache)
+  }
+
+  const aggregates = list.map((day) => {
+    const fetchedDay = fetched.get(day)
+    if (fetchedDay !== undefined) return fetchedDay
+    const cached = cache.days[day]
+    if (cached !== undefined) return cached
+    return aggregateDay(day, [], false)
   })
 
   if (failures.length === list.length) {
@@ -332,13 +490,15 @@ export async function collect(days) {
     throw error
   }
 
-  const aggregated = aggregateUsage(list, itemsByDay, truncatedDays)
-  const warnings = [...aggregated.warnings]
+  const merged = mergeDayAggregates(aggregates)
+  const warnings = [...merged.warnings]
   if (failures.length > 0) warnings.push(`有 ${failures.length} 天的数据拉取失败，已跳过：${failures.slice(0, 3).join('；')}`)
+  const staleDays = list.filter(day => cache.days[day] !== undefined && !dayIsFresh(cache.days[day], now))
+  if (staleDays.length > 0) warnings.push(`${staleDays.length} 天使用磁盘缓存（${staleDays[0]}${staleDays.length > 1 ? ' 等' : ''}）。`)
 
   let go
   try {
-    go = aggregateGoSeries(await consoleFetch('/activity/go', key))
+    go = aggregateGoSeries(await consoleFetchCached('/activity/go', key))
   } catch (error) {
     warnings.push(`官方 Go 周期汇总拉取失败：${error instanceof Error ? error.message : String(error)}`)
     go = undefined
@@ -350,12 +510,22 @@ export async function collect(days) {
     days,
     keySource: source,
     range: { from: list[0], to: list[list.length - 1] },
-    summary: aggregated.summary,
-    models: aggregated.models,
-    daily: aggregated.daily,
+    summary: merged.summary,
+    models: merged.models,
+    daily: merged.daily,
     go,
     warnings,
+    cache: { fetchedDays: fetched.size, cachedDays: list.length - fetched.size },
   }
+}
+
+/** Short-TTL cache for the small `/activity/go` payload. */
+let goCache = { at: 0, data: undefined }
+async function consoleFetchCached(path, key) {
+  if (goCache.data !== undefined && Date.now() - goCache.at < GO_TTL_MS) return goCache.data
+  const data = await consoleFetch(path, key)
+  goCache = { at: Date.now(), data }
+  return data
 }
 
 /** Serialize one JSON response with no client-side caching. */
@@ -367,25 +537,18 @@ function writeJson(res, status, payload) {
 }
 
 /**
- * Host plugin body: register the one fenced JSON route and keep a small
- * in-memory cache so reopening the settings page does not re-pull 30 days.
+ * Host plugin body: register the fenced JSON route, the background warm-up, and
+ * the in-process cache that makes later reads cheap.
  * @param ctx - host context (webServer, connection).
  */
 export function apply(ctx) {
-  let cache
   let inflight
 
-  const load = async (days, force) => {
-    if (!force && cache !== undefined && cache.days === days && Date.now() - cache.at < CACHE_TTL_MS) return cache.data
-    if (inflight !== undefined && inflight.days === days) return inflight.promise
-    const promise = collect(days)
-      .then((data) => {
-        cache = { days, at: Date.now(), data }
-        return data
-      })
-      .finally(() => {
-        if (inflight !== undefined && inflight.promise === promise) inflight = undefined
-      })
+  const load = async (days, options = {}) => {
+    if (inflight !== undefined && inflight.days === days && options.force !== true && options.full !== true) return inflight.promise
+    const promise = collect(days, options).finally(() => {
+      if (inflight !== undefined && inflight.promise === promise) inflight = undefined
+    })
     inflight = { days, promise }
     return promise
   }
@@ -409,9 +572,12 @@ export function apply(ctx) {
       }
       const requested = Number(url.searchParams.get('days') ?? DEFAULT_DAYS)
       const days = Number.isFinite(requested) ? Math.min(MAX_DAYS, Math.max(1, Math.round(requested))) : DEFAULT_DAYS
-      const force = url.searchParams.get('force') === '1'
+      const options = {
+        force: url.searchParams.get('force') === '1',
+        full: url.searchParams.get('full') === '1',
+      }
       try {
-        writeJson(res, 200, { ok: true, data: await load(days, force) })
+        writeJson(res, 200, { ok: true, data: await load(days, options) })
       } catch (error) {
         writeJson(res, 502, {
           ok: false,
@@ -423,4 +589,20 @@ export function apply(ctx) {
       }
     },
   }), 'dsh-opencode-go-usage: /usage-stats/api routes')
+
+  /* Warm the cache after activation so the first panel open is usually instant,
+     then keep today's bucket fresh without anyone opening the UI. */
+  ctx.effect(() => {
+    const warm = () => {
+      load(DEFAULT_DAYS).catch(() => {
+        /* warm-up failures stay silent; the UI reports them on demand */
+      })
+    }
+    const timer = setTimeout(warm, 1500)
+    const interval = setInterval(warm, WARM_INTERVAL_MS)
+    return () => {
+      clearTimeout(timer)
+      clearInterval(interval)
+    }
+  }, 'dsh-opencode-go-usage: background warm-up')
 }

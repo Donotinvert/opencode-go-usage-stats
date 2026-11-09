@@ -53,3 +53,11 @@ if (data.go !== undefined) {
   console.log(`  go period:  from ${data.go.startsAt.slice(0, 10)} totalTokens=${data.go.totalTokens} requests=${data.go.totalRequests} allowanceMicroCents=${data.go.totalCostMicroCents}`)
 }
 if (data.warnings.length > 0) console.log(`  warnings:   ${data.warnings.join(' | ')}`)
+
+// 3. A second read must come from the persisted day cache.
+const cachedStartedAt = Date.now()
+const cached = await collect(days)
+const cachedElapsed = Date.now() - cachedStartedAt
+if (cached.summary.total !== data.summary.total) throw new Error(`cached total ${cached.summary.total} !== live total ${data.summary.total}`)
+if (cached.cache.fetchedDays > 2) throw new Error(`cached read fetched ${cached.cache.fetchedDays} days; expected at most 2`)
+console.log(`cached read OK in ${(cachedElapsed / 1000).toFixed(1)}s (fetched ${cached.cache.fetchedDays} days, ${cached.cache.cachedDays} from cache)`)

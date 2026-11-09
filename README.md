@@ -1,10 +1,23 @@
 # dsh-opencode-go-usage
 
-DSH 插件「用量统计」：在**设置**里新增一页，直接从 **OpenCode Console 官方接口**拉取最近
-30 天的**分模型日消耗**（token），覆盖用该 OpenCode Go API Key 的所有客户端流量。
+DSH 插件「用量统计」：从 **OpenCode Console 官方接口**拉取最近 30 天的**分模型日消耗**
+（token），覆盖用该 OpenCode Go API Key 的所有客户端流量。可从左侧栏按钮 / 快捷键直接
+打开浮层面板，也可在**设置**里查看完整页面。
 
 仓库 <https://github.com/Donotinvert/opencode-go-usage-stats>；目录与插件包名均为
 `dsh-opencode-go-usage`（profile 挂载标识与客户端 bundle id）。
+
+## 快速查看（v0.3.0+）
+
+- **左侧栏底部「用量」按钮**（设置按钮上方）：任意会话一键打开浮层大面板；Esc、点遮罩
+  或「关闭」退出。
+- **快捷键 `Ctrl+Shift+G`**（macOS 为 `Cmd+Shift+G`）开关面板；可在「设置 → 快捷键」
+  里改键或查看冲突。
+- 浮层、设置页共用同一份数据与渲染，不会各自重复拉取。
+- Host 端按天落盘缓存：`$DSH_HOME/cache/dsh-opencode-go-usage/day-aggregates.v1.json`。
+  已完成日期直接复用，只有今天（和昨天收尾）会短 TTL 重拉；插件启动 1.5 秒后开始后台
+  预热，之后每 10 分钟刷新今天。因此打开面板通常低于 1 秒。
+- 首次安装或缓存为空时仍需拉一次 30 天（约 4–12 秒，取决于网络）。
 
 ## 它能看什么
 
@@ -17,7 +30,9 @@ DSH 插件「用量统计」：在**设置**里新增一页，直接从 **OpenCo
 
 数据来源：`GET https://opencode.ai/console/api/activity/go` 与
 `GET /console/api/request-logs/export?since=…&until=…&format=json`（逐日请求日志，
-`request-logs` 保留最近 30 天）。Host 侧缓存 10 分钟，「刷新」按钮强制重新拉取。
+`request-logs` 保留最近 30 天）。导出单页上限 1000 条；触顶的日期会改用列表接口的游标
+分页补齐，避免大用量日被少算。Host 端按天缓存，「刷新」只强制补拉今天/昨天；调试可用
+`/usage-stats/api/data?days=30&full=1` 全量重拉。
 
 ## 认证
 
@@ -61,21 +76,23 @@ Host 半侧按以下顺序解析 OpenCode Go API Key，**Key 不会返回给浏�
   显示 0。
 - Go 计划额度按美元计量（不同模型单价不同），本页展示 token 数量，额度消耗单列。
 - 页面文案暂为中文（用户环境为中文）；如需英文可后续补 locale 字典。
+- 首次安装/缓存为空时第一次打开仍需 4–12 秒；此后由磁盘缓存与后台预热保证秒开。
 
 ## 卸载
 
 1. 删除 `~/.dsh/profiles/desktop/cordis.patch.yml` 末尾的 `usage-stats` insert 行；
 2. 在 profile 目录执行 `pnpm remove dsh-opencode-go-usage`；
 3. 硬刷新页面。`D:\code\dsh-plugin\dsh-opencode-go-usage` 源码目录可保留或删除。
+   可选：删除 `$DSH_HOME/cache/dsh-opencode-go-usage/` 缓存目录。
 
 ## 已验证 / 未验证
 
-- 已验证：Host 半侧 30 天真实数据端到端（`scripts/smoke.mjs`：780.7M tokens / 3,918 次
-  请求 / 2 个有消耗的模型，单次拉取 12–27s）；Host 路由 `/usage-stats/api/data` 已注册
-  （未认证请求返回本插件的 403 JSON）；Client bundle 已进入模块图并被
-  `/plugins/??dsh-opencode-go-usage/client.js&rev=…` 正常返回（200，含「用量统计」与接口路径）。
-- 未验证：设置页在浏览器中的实际渲染与交互（当前会话没有已认证页面的截图/浏览器控制
-  能力）。硬刷新后请打开 设置 → 用量统计 确认；如有报错把页面文字发回即可排查。
+- 已验证：Host 半侧真实 30 天数据端到端（`scripts/smoke.mjs`：约 11.4 亿 tokens / 2 个
+  有消耗的模型；首次全量约 4–12 秒，二次读取 0 秒、只命中磁盘缓存）；Host 路由
+  `/usage-stats/api/data` 已注册（未认证请求返回本插件的 403 JSON）；Client bundle 已进入
+  模块图（含侧栏按钮、浮层与新快捷键代码）。
+- 未验证：浏览器中的实际渲染、侧栏按钮/浮层/快捷键交互（当前会话没有已认证页面的截图或
+  浏览器控制能力）。重启 DSH 并硬刷新后请实际点开确认；如有报错把页面文字发回即可排查。
 
 ## 开发
 
