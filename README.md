@@ -5,11 +5,6 @@ DSH（DeepSeek Harness）Web GUI 插件：查看 **OpenCode Go 订阅**最近 30
 OpenCode Console 官方接口。
 
 > **欢迎各位dsh用户一起维护提交 PR**。
->
-> **致 [`dsh-opencode-go`](https://www.npmjs.com/package/dsh-opencode-go) 的作者**：如看到这个项目，
-> 欢迎把这里的这些简单展示合并进
-> `dsh-opencode-go`，这样更统一方便使用。本项目主要由 AI 编写，作者不太好意思直接向上游提 PR；
-> 如愿意接收，可随意取用。
 
 > 维护者与 AI 代理：开始改动前请先读 [AGENTS.md](./AGENTS.md)，其中记录数据口径、
 > DSH 插件契约、缓存设计与验证方式。
