@@ -41,7 +41,7 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - 「日用量堆叠柱状图」：每天一根柱，Top3 模型 + 「其他」最多 4 个系列；Top3 按窗口 `totalTokens` 排名，跨口径稳定；「其他」聚合第 4 名之后的全部模型。
 - 柱高按所选口径（`total/input/output/cacheRead`）与窗口内单日最大值 ×1.08 归一化（留出顶部余量，柱形与参考线共用同一比例尺）；虚线为「过去 N 天日均」（排除今天），今天柱形加品牌色描边、日期标签高亮；悬停显示当天合计、较日均幅度与各系列明细；图例显示各系列总量与占比；空值日画 2px 基线。
 - 底部额度区 `QuotaSection`：一行三条进度条（5 小时/每周/每月），显示已用百分比、进度和重置时间，标题右侧标「每分钟刷新 · 更新于 HH:mm」。**进度条为「白色 1px 描边 + 透明底」，白色填充片代表剩余额度，空白代表已用**（用户指定语义）；填充宽度 = `100 − percent`，整条 `title` 提示「已用 X%，白色填充为剩余额度」。不要用 brand-primary 当填充色（本主题渲染成白色，无法与空白区分）。数据来自独立的 `snapshot.quota`，由每分钟轮询填充；失败时显示错误文案，不回落成 0%。
-- 侧栏图标 `UsageRing`：两个半环（上半环 5 小时、下半环本月），用 `pathLength=100` + `strokeDasharray="<percent> 100"` 画已用比例；两段弧各留约 18° 缺口以免上下粘连；悬停 title 汇总三项百分比与重置时间。
+- 侧栏图标 `UsageRing`：两个半环（上半环 5 小时、下半环本月），用 `pathLength=100` + `strokeDasharray="<percent> 100"` 画已用比例；两段弧各留约 18° 缺口以免上下粘连；**弧线颜色必须用 `SERIES_COLORS[0]`（与柱状图第一系列同色）**，不要用 `currentColor`（会变成灰色，与打开后的图表不一致）；悬停 title 汇总三项百分比与重置时间。
 - 组件结构：`DailyChart`（纯数据 → 柱/轴/明细/图例）+ `UsageBody`（汇总块/口径/图表/告警/额度）；`data.models` 字段是 `totalTokens/...`，`row.byModel` 桶字段是 `total/input/output/cacheRead`，两个访问器 `metricOfModel` 与 `metricOf` 不可混用。数据来源脚注已删除，口径说明改在分项 `title` 提示里。
 - 渲染验证：`node scripts/render-check.mjs`。本机没有可被 Node import 的独立 React（客户端 bundle 从模块表取 React），脚本内自带最小 React 替身（createElement + 4 个 hook）再序列化元素树；断言不得含 `<table>`、必须有两个汇总块与 `dsh-us-avg`、必须有 `dsh-us-seg` 与 Top3+其他、必须有额度三进度条与侧栏四条 `<path>` 半环。fixture 窗口以运行当天 UTC 结尾，日期断言不写死。
 

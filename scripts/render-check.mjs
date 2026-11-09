@@ -207,6 +207,7 @@ const footerRail = renderSlot('sidebar.footer.action', { wide: false })
 assert('wide footer shows its label', footerWide.includes('用量'))
 assert('rail footer shrinks to the icon', footerRail.includes('data-wide="false"'))
 assert('footer icon draws two half-ring arcs', [...footerWide.matchAll(/<path/g)].length === 4)
+assert('footer ring uses the chart series color', [...footerWide.matchAll(/<path[^>]*stroke="var\(--dsw-alias-brand-primary,#4d6bfe\)"/g)].length === 4)
 assert('footer top arc follows the 5-hour window', footerWide.includes('strokeDasharray="4 100"'))
 assert('footer bottom arc follows the monthly window', footerWide.includes('strokeDasharray="21 100"'))
 

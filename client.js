@@ -318,7 +318,9 @@ window.__ModuleLoader__.load({
         d: path,
         pathLength: 100,
         fill: 'none',
-        stroke: 'currentColor',
+        /* Same color as the chart's first series, so the icon and the opened
+           bars read as one palette (the theme brand token, white on dark). */
+        stroke: SERIES_COLORS[0],
         strokeWidth: 3,
         strokeLinecap: 'round',
         strokeOpacity: track ? .22 : 1,
