@@ -31,8 +31,8 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - 快捷键：`ctx.shortcuts.register({ id, label: () => 文案, aliases, defaults: { 'desktop:windows': { code:'KeyG', modifiers:['primary','shift'] }, … }, regions:['page','editable'], modals:[], resolve:()=>({status:'handled', run}) })`；需在 `ctx.effect` 内注册，且与已有默认键冲突会抛错——必须 `try/catch` 兜底，不能让它带崩整个插件。`ctx.inject(['shortcuts'], cb)` 可做可选注入。
 - Client 请求 Host：`new URL('usage-stats/api/data', document.baseURI)`。桌面 shell 把 `dsh-app://app/` 的非静态路径同源转发给 Host；写死 `/usage-stats/...` 会绕过反向代理前缀。
 - 生效规则：profile 依赖/挂载行变化 → HMR 重新组合；`client.js` 按 mtime 重载（硬刷新）；`index.js` 改动必须重启桌面应用。
-- `dsh` CLI 拒绝操作 desktop profile（"managed exclusively by the Electron application"），`--dump-config` 不可用。安装/重装只能使用桌面自带的 node+pnpm：
-  `<安装目录>\resources\runtime\primary-runtime\dependencies\{node\bin\node.exe,pnpm\bin\pnpm.cjs}`，在 profile 目录执行 `add "link:<绝对路径>"`。
+- `dsh` CLI 拒绝操作 desktop profile（"managed exclusively by the Electron application"），`--dump-config` 不可用。用户安装推荐 `dsh plugin --profile <profile> add "github:Donotinvert/opencode-go-usage-stats"`（GitHub 直装，已实测可解析）；本地开发用 `link:<本仓库绝对路径>`。`dsh plugin` 只是转发 pnpm，**不会**自动把插件加入 `dsh.profile.bundles`，仍需手工追加挂载行。桌面版可用自带 node+pnpm：
+  `<安装目录>\resources\runtime\primary-runtime\dependencies\{node\bin\node.exe,pnpm\bin\pnpm.cjs}`。
 - profile 的 `node_modules/dsh-opencode-go-usage` 是符号链接。**移动插件目录后必须重新 `pnpm add link:<新路径>`**，否则 Host 仍加载旧路径。
 
 ### 展示结构（0.6.0 起）
@@ -40,12 +40,14 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - 顶部两个并排汇总块（`SummarySection`）：左「最近 N 天累计」用 `summary` 显示总 token、请求数、模型数与输入/输出/缓存读；右「今日（UTC）」取 `daily` 中当天的 `totals`，显示今日总 token、分项、占累计比例和「较前 N 天日均 ±X%」。`daily` 行只有 `totals` 与 `byModel`，**没有每日请求数**；要展示今日请求数必须改 Host 的 `mergeDayAggregates`。
 - 「日用量堆叠柱状图」：每天一根柱，Top3 模型 + 「其他」最多 4 个系列；Top3 按窗口 `totalTokens` 排名，跨口径稳定；「其他」聚合第 4 名之后的全部模型。
 - 柱高按所选口径（`total/input/output/cacheRead`）与窗口内单日最大值 ×1.08 归一化（留出顶部余量，柱形与参考线共用同一比例尺）；虚线为「过去 N 天日均」（排除今天），今天柱形加品牌色描边、日期标签高亮；悬停显示当天合计、较日均幅度与各系列明细；图例显示各系列总量与占比；空值日画 2px 基线。
-- 底部额度区 `QuotaSection`：一行三条进度条（5 小时/每周/每月），显示已用百分比、进度和重置时间，标题右侧标「每分钟刷新 · 更新于 HH:mm」。**进度条为「白色 1px 描边 + 透明底」，白色填充片代表剩余额度，空白代表已用**（用户指定语义）；填充宽度 = `100 − percent`，整条 `title` 提示「已用 X%，白色填充为剩余额度」。不要用 brand-primary 当填充色（本主题渲染成白色，无法与空白区分）。数据来自独立的 `snapshot.quota`，由每分钟轮询填充；失败时显示错误文案，不回落成 0%。
-- 侧栏图标 `UsageRing`：两个半环（上半环 5 小时、下半环本月），用 `pathLength=100` + `strokeDasharray="<剩余%> 100"` 画**剩余额度**（与额度条「白色=剩余」语义一致，低用量时接近满环）；两段弧各留约 18° 缺口以免上下粘连；**弧线颜色必须用 `SERIES_COLORS[0]`（与柱状图第一系列同色）**，不要用 `currentColor`（会变成灰色，与打开后的图表不一致）；悬停信息改由 `QuotaHoverCard` 展示，不再使用 `title` 文本。
+- 底部额度区 `QuotaSection`：一行三条进度条（5 小时/每周/每月），显示已用百分比、进度和重置时间，标题右侧标「每分钟刷新 · 更新于 HH:mm」。**进度条为「1px 描边 + 透明底」，填充片代表剩余额度，空白代表已用**；描边与填充用 `--dsh-us-quota-ink`（深色主题白、浅色主题 `#1f2328`），填充宽度 = `100 − percent`，整条 `title` 提示「已用 X%，填充部分为剩余额度」。不要用 brand-primary 当填充色。数据来自独立的 `snapshot.quota`，由每分钟轮询填充；失败时显示错误文案，不回落成 0%。
+- 侧栏图标 `UsageRing`：两个半环（上半环 5 小时、下半环本月），用 `pathLength=100` + `strokeDasharray="<剩余%> 100"` 画**剩余额度**（与额度条填充=剩余语义一致，低用量时接近满环）；两段弧各留约 18° 缺口以免上下粘连；**弧线颜色用 `SERIES_COLORS[0]`（即 `var(--dsh-us-series-0)`，与柱状图第一系列同色、随主题切换）**，不要用 `currentColor`（会变成灰色，与打开后的图表不一致）；悬停信息改由 `QuotaHoverCard` 展示，不再使用 `title` 文本。
 - 侧栏按钮悬停：右侧弹出极简额度卡 `QuotaHoverCard`（min-width 168px，**不画条形图**）：仅三行 `5 小时 / 每周 / 每月` + `剩 X%`（剩余 = 100 − 已用%），无标题、无分隔线、无操作按钮；点击图标本身打开浮层。不要恢复 `title` 文本 tooltip；卡片用 fixed 定位在按钮右侧（`left = rect.right + 10`，`bottom` 对齐按钮底），以 `data-open` 控制显隐，便于静态渲染断言。
 - 组件结构：`DailyChart`（纯数据 → 柱/轴/明细/图例）+ `UsageBody`（汇总块/口径/图表/告警/额度）+ `QuotaHoverCard`（侧栏悬停卡）；`data.models` 字段是 `totalTokens/...`，`row.byModel` 桶字段是 `total/input/output/cacheRead`，两个访问器 `metricOfModel` 与 `metricOf` 不可混用。数据来源脚注已删除，口径说明改在分项 `title` 提示里。
 - 渲染验证：`node scripts/render-check.mjs`。本机没有可被 Node import 的独立 React（客户端 bundle 从模块表取 React），脚本内自带最小 React 替身（createElement + 4 个 hook）再序列化元素树；断言不得含 `<table>`、必须有两个汇总块与 `dsh-us-avg`、必须有 `dsh-us-seg` 与 Top3+其他、必须有额度三进度条与侧栏四条 `<path>` 半环。fixture 窗口以运行当天 UTC 结尾，日期断言不写死。
 - README 的截图位于 `docs/screenshots/`（`panel.png` 浮层面板、`quota.png` 额度区、`hover-card.png` 侧栏悬停卡）；入口、配色或布局变化后同步替换截图，并在 README 保持「功能 / 数据来源与隐私 / 与其它插件配合 / 安装 / 注意事项 / 开发测试」结构。
+
+- 主题适配：DSH 深色主题在 `<body>` 上置 `data-ds-dark-theme` 属性，浅色时属性不存在。图表/侧栏环/额度条通过 CSS 变量 `--dsh-us-series-0..3`、`--dsh-us-quota-ink` 在 `.dsh-us` / `.dsh-us-footwrap` / `.dsh-us-overlay` 上切换配色（浅色蓝/青/红 + 深色墨；深色白/青/红 + 白墨）。不要写死单套颜色，也不要依赖 `prefers-color-scheme`（手动主题与系统可能不一致）。
 
 ### 加载性能与缓存（0.3.0 起，勿破坏）
 

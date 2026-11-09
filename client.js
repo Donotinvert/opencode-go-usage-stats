@@ -12,13 +12,14 @@ window.__ModuleLoader__.load({
       { id: 'cacheRead', label: '缓存读' },
     ]
 
-    /* Distinct mid-tone hues that read on both the light and dark theme;
-       the first slot follows the host brand color. */
+    /* Theme-aware series palette: blue/teal/red on light, white/teal/red on
+       dark (see the --dsh-us-series-* blocks in CSS). The first slot also
+       colours the sidebar ring, so icon and chart always match. */
     const SERIES_COLORS = [
-      'var(--dsw-alias-brand-primary,#4d6bfe)',
-      '#12a594',
-      '#e5484d',
-      'var(--dsw-alias-label-tertiary,#94a3b8)',
+      'var(--dsh-us-series-0,#4d6bfe)',
+      'var(--dsh-us-series-1,#0f9d8a)',
+      'var(--dsh-us-series-2,#d13438)',
+      'var(--dsh-us-series-3,#94a3b8)',
     ]
     const TOP_MODELS = 3
 
@@ -32,6 +33,8 @@ window.__ModuleLoader__.load({
     const CSS = `
 .dsh-us{display:flex;flex-direction:column;gap:16px;color:var(--dsw-alias-label-primary,#1f2328);font-size:13px;line-height:1.5}
 .dsh-us *{box-sizing:border-box}
+.dsh-us,.dsh-us-footwrap,.dsh-us-overlay{--dsh-us-series-0:#4d6bfe;--dsh-us-series-1:#0f9d8a;--dsh-us-series-2:#d13438;--dsh-us-series-3:#94a3b8;--dsh-us-quota-ink:#1f2328}
+body[data-ds-dark-theme] .dsh-us,body[data-ds-dark-theme] .dsh-us-footwrap,body[data-ds-dark-theme] .dsh-us-overlay{--dsh-us-series-0:var(--dsw-alias-brand-primary,#ffffff);--dsh-us-series-1:#12a594;--dsh-us-series-2:#e5484d;--dsh-us-series-3:var(--dsw-alias-label-tertiary,#94a3b8);--dsh-us-quota-ink:#ffffff}
 .dsh-us-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
 .dsh-us-title{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em}
 .dsh-us-sub{margin:2px 0 0;color:var(--dsw-alias-label-secondary,#59636e);font-size:12px}
@@ -58,8 +61,8 @@ window.__ModuleLoader__.load({
 .dsh-us-quota-item{display:flex;flex-direction:column;gap:5px;min-width:0}
 .dsh-us-quota-label{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary,#59636e)}
 .dsh-us-quota-value{color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;font-variant-numeric:tabular-nums}
-.dsh-us-quota-track{height:6px;border-radius:999px;border:1px solid rgba(255,255,255,.85);background:transparent;overflow:hidden}
-.dsh-us-quota-fill{height:100%;border-radius:999px;background:#fff;transition:width .2s ease}
+.dsh-us-quota-track{height:6px;border-radius:999px;border:1px solid var(--dsh-us-quota-ink,#fff);background:transparent;overflow:hidden}
+.dsh-us-quota-fill{height:100%;border-radius:999px;background:var(--dsh-us-quota-ink,#fff);transition:width .2s ease}
 .dsh-us-quota-reset{color:var(--dsw-alias-label-tertiary,#818b98);font-size:11px;font-variant-numeric:tabular-nums}
 @media (max-width:560px){.dsh-us-quota-row{grid-template-columns:1fr}}
 .dsh-us-meta{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;color:var(--dsw-alias-label-secondary,#59636e);font-size:12px}
@@ -606,7 +609,7 @@ window.__ModuleLoader__.load({
                   window?.status === 'rate-limited' ? '已用尽' : `已用 ${Math.round(percent)}%`)),
               h('div', {
                 className: 'dsh-us-quota-track',
-                title: `已用 ${Math.round(percent)}%，白色填充为剩余额度`,
+                title: `已用 ${Math.round(percent)}%，填充部分为剩余额度`,
               },
                 h('div', { className: 'dsh-us-quota-fill', style: { width: `${100 - percent}%` } })),
               h('div', { className: 'dsh-us-quota-reset' }, `重置 ${formatReset(window?.resetsAt)}`))
