@@ -4,6 +4,13 @@ DSH（DeepSeek Harness）Web GUI 插件：查看 **OpenCode Go 订阅**最近 30
 以及 5 小时 / 每周 / 每月额度余量。入口在设置页、左侧栏按钮和悬停卡，数据直接来自
 OpenCode Console 官方接口。
 
+> **欢迎一起维护**：欢迎提交 PR、Issue 或建议，一起把这个小插件长期维护下去。
+>
+> **致 [`dsh-opencode-go`](https://www.npmjs.com/package/dsh-opencode-go) 的作者**：如果你们看到这个项目，
+> 欢迎把这里的这些功能（30 天分模型用量与柱状图、Go 额度余量、侧栏入口与悬停卡）合并进
+> `dsh-opencode-go`，这样大家就不用再多维护一个插件了。本项目主要由 AI 编写，作者不太好意思
+> 直接向上游提 PR；如果你们愿意接收，我可以按你们的代码风格和目录结构整理好后再提交。
+
 > 维护者与 AI 代理：开始改动前请先读 [AGENTS.md](./AGENTS.md)，其中记录数据口径、
 > DSH 插件契约、缓存设计与验证方式。
 
