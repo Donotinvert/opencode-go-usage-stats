@@ -185,6 +185,13 @@ assert('settings draws the average reference line', settingsMarkup.includes('cla
 assert('settings renders the quota row', settingsMarkup.includes('OpenCode Go 额度') && settingsMarkup.includes('5 小时') && settingsMarkup.includes('每周') && settingsMarkup.includes('每月'))
 assert('settings shows quota percentages', settingsMarkup.includes('已用 21%') && settingsMarkup.includes('已用 4%'))
 assert('settings shows quota reset times', settingsMarkup.includes('重置 ') && settingsMarkup.includes('每分钟刷新'))
+assert('quota bar is a white-outlined transparent track', settingsMarkup.includes('border:1px solid') && settingsMarkup.includes('background:transparent'))
+assert('quota fill is white and means remaining quota', settingsMarkup.includes('background:#fff') && !settingsMarkup.includes('data-tone'))
+assert('quota fill width is the remaining share', settingsMarkup.includes('width:96%') && settingsMarkup.includes('width:99%') && settingsMarkup.includes('width:79%'))
+assert('quota tooltip explains white = remaining', settingsMarkup.includes('白色填充为剩余额度'))
+assert('fully used quota renders an empty bar', renderNode(h(componentOf('settings.section'), {
+  controller: makeController({ quota: { ...quota, windows: { ...quota.windows, monthly: { status: 'rate-limited', percent: 100, resetsAt: quota.windows.monthly.resetsAt } } } }),
+})).includes('width:0%'))
 assert('settings dropped the data-source footnote', !settingsMarkup.includes('数据来源'))
 
 const metricMarkup = renderNode(h(componentOf('settings.section'), { controller: makeController({ metric: 'cacheRead' }) }))

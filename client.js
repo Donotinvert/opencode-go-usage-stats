@@ -58,8 +58,8 @@ window.__ModuleLoader__.load({
 .dsh-us-quota-item{display:flex;flex-direction:column;gap:5px;min-width:0}
 .dsh-us-quota-label{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary,#59636e)}
 .dsh-us-quota-value{color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;font-variant-numeric:tabular-nums}
-.dsh-us-quota-track{height:6px;border-radius:999px;background:var(--dsw-alias-bg-l2,#eef1f4);overflow:hidden}
-.dsh-us-quota-fill{height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary,#4d6bfe)}
+.dsh-us-quota-track{height:6px;border-radius:999px;border:1px solid rgba(255,255,255,.85);background:transparent;overflow:hidden}
+.dsh-us-quota-fill{height:100%;border-radius:999px;background:#fff;transition:width .2s ease}
 .dsh-us-quota-reset{color:var(--dsw-alias-label-tertiary,#818b98);font-size:11px;font-variant-numeric:tabular-nums}
 @media (max-width:560px){.dsh-us-quota-row{grid-template-columns:1fr}}
 .dsh-us-meta{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;color:var(--dsw-alias-label-secondary,#59636e);font-size:12px}
@@ -582,8 +582,11 @@ window.__ModuleLoader__.load({
                 h('span', null, item.label),
                 h('span', { className: 'dsh-us-quota-value' },
                   window?.status === 'rate-limited' ? '已用尽' : `已用 ${Math.round(percent)}%`)),
-              h('div', { className: 'dsh-us-quota-track' },
-                h('div', { className: 'dsh-us-quota-fill', style: { width: `${percent}%` } })),
+              h('div', {
+                className: 'dsh-us-quota-track',
+                title: `已用 ${Math.round(percent)}%，白色填充为剩余额度`,
+              },
+                h('div', { className: 'dsh-us-quota-fill', style: { width: `${100 - percent}%` } })),
               h('div', { className: 'dsh-us-quota-reset' }, `重置 ${formatReset(window?.resetsAt)}`))
           })))
     }
