@@ -19,6 +19,7 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - 请求日志只保留 **30 天**（`retentionDays=30`），更早日期返回空 → 页面窗口上限 30 天。不要用 `day=` 参数分日（时区语义不明），用 since/until 毫秒窗口 + UTC 日聚合。
 - 本机网络偶发 `SSL: UNEXPECTED_EOF`：单日请求必须重试（当前 3 次、400ms 递增），否则缺一天会污染统计。
 - 无 `model` 字段的非推理请求必须跳过，不能计入请求数。
+- 额度（5 小时/每周/每月）：`GET https://opencode.ai/zen/go/v1/usage`（同一个 Go Key，Bearer）→ `{"usage":{"rolling":{"status","percent","resetsAt"},"weekly":…,"monthly":…}}`。`percent` 是**已用百分比**（0–100），`status` 为 `ok`/`rate-limited`，`resetsAt` 为 ISO 时间。注意 `/zen/go/usage`（无 `/v1`）返回 404 HTML，必须带 `/v1`。缺字段或格式不符要整体报错，不能当成 0%（会被读成"没用量"）。Host 缓存 60 秒，客户端每分钟轮询 `/usage-stats/api/quota`，与 30 天 token 缓存相互独立。
 
 ### DSH 插件契约（0.2.2-rc.1，从 app.asar 与已装插件反推）
 
@@ -34,12 +35,15 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
   `<安装目录>\resources\runtime\primary-runtime\dependencies\{node\bin\node.exe,pnpm\bin\pnpm.cjs}`，在 profile 目录执行 `add "link:<绝对路径>"`。
 - profile 的 `node_modules/dsh-opencode-go-usage` 是符号链接。**移动插件目录后必须重新 `pnpm add link:<新路径>`**，否则 Host 仍加载旧路径。
 
-### 展示结构（0.4.0 起）
+### 展示结构（0.6.0 起）
 
-- 两张表（按模型表、日×模型矩阵）已被删除，改为「日用量堆叠柱状图」：每天一根柱，Top3 模型 + 「其他」最多 4 个系列；Top3 按窗口 `totalTokens` 排名，跨口径稳定；「其他」聚合第 4 名之后的全部模型。
-- 柱高按所选口径（`total/input/output/cacheRead`）与窗口内单日最大值归一化；柱形悬停显示当天合计与各系列明细；图例显示各系列总量与占比；空值日画 2px 基线。
-- 组件结构：`DailyChart`（纯数据 → 柱/轴/明细/图例）+ `UsageBody`（卡片/口径/图表/告警/脚注）；`data.models` 字段是 `totalTokens/...`，`row.byModel` 桶字段是 `total/input/output/cacheRead`，两个访问器 `metricOfModel` 与 `metricOf` 不可混用。
-- 渲染验证：`node scripts/render-check.mjs`。本机没有可被 Node import 的独立 React（客户端 bundle 从模块表取 React），脚本内自带最小 React 替身（createElement + 4 个 hook）再序列化元素树；断言不得含 `<table>`、必须有 `dsh-us-seg` 与 Top3+其他。
+- 顶部两个并排汇总块（`SummarySection`）：左「最近 N 天累计」用 `summary` 显示总 token、请求数、模型数与输入/输出/缓存读；右「今日（UTC）」取 `daily` 中当天的 `totals`，显示今日总 token、分项、占累计比例和「较前 N 天日均 ±X%」。`daily` 行只有 `totals` 与 `byModel`，**没有每日请求数**；要展示今日请求数必须改 Host 的 `mergeDayAggregates`。
+- 「日用量堆叠柱状图」：每天一根柱，Top3 模型 + 「其他」最多 4 个系列；Top3 按窗口 `totalTokens` 排名，跨口径稳定；「其他」聚合第 4 名之后的全部模型。
+- 柱高按所选口径（`total/input/output/cacheRead`）与窗口内单日最大值 ×1.08 归一化（留出顶部余量，柱形与参考线共用同一比例尺）；虚线为「过去 N 天日均」（排除今天），今天柱形加品牌色描边、日期标签高亮；悬停显示当天合计、较日均幅度与各系列明细；图例显示各系列总量与占比；空值日画 2px 基线。
+- 底部额度区 `QuotaSection`：一行三条进度条（5 小时/每周/每月），显示已用百分比、进度和重置时间，标题右侧标「每分钟刷新 · 更新于 HH:mm」。数据来自独立的 `snapshot.quota`，由每分钟轮询填充；失败时显示错误文案，不回落成 0%。
+- 侧栏图标 `UsageRing`：两个半环（上半环 5 小时、下半环本月），用 `pathLength=100` + `strokeDasharray="<percent> 100"` 画已用比例；两段弧各留约 18° 缺口以免上下粘连；悬停 title 汇总三项百分比与重置时间。
+- 组件结构：`DailyChart`（纯数据 → 柱/轴/明细/图例）+ `UsageBody`（汇总块/口径/图表/告警/额度）；`data.models` 字段是 `totalTokens/...`，`row.byModel` 桶字段是 `total/input/output/cacheRead`，两个访问器 `metricOfModel` 与 `metricOf` 不可混用。数据来源脚注已删除，口径说明改在分项 `title` 提示里。
+- 渲染验证：`node scripts/render-check.mjs`。本机没有可被 Node import 的独立 React（客户端 bundle 从模块表取 React），脚本内自带最小 React 替身（createElement + 4 个 hook）再序列化元素树；断言不得含 `<table>`、必须有两个汇总块与 `dsh-us-avg`、必须有 `dsh-us-seg` 与 Top3+其他、必须有额度三进度条与侧栏四条 `<path>` 半环。fixture 窗口以运行当天 UTC 结尾，日期断言不写死。
 
 ### 加载性能与缓存（0.3.0 起，勿破坏）
 

@@ -22,6 +22,13 @@ window.__ModuleLoader__.load({
     ]
     const TOP_MODELS = 3
 
+    /** Go plan quota windows, in the order the quota row shows them. */
+    const QUOTA_WINDOWS = [
+      { id: 'rolling', label: '5 小时' },
+      { id: 'weekly', label: '每周' },
+      { id: 'monthly', label: '每月' },
+    ]
+
     const CSS = `
 .dsh-us{display:flex;flex-direction:column;gap:16px;color:var(--dsw-alias-label-primary,#1f2328);font-size:13px;line-height:1.5}
 .dsh-us *{box-sizing:border-box}
@@ -32,11 +39,29 @@ window.__ModuleLoader__.load({
 .dsh-us-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.04))}
 .dsh-us-btn:disabled{opacity:.55;cursor:default}
 .dsh-us-btn[aria-pressed="true"]{border-color:var(--dsw-alias-brand-primary,#4d6bfe);color:var(--dsw-alias-brand-primary,#4d6bfe);background:transparent}
-.dsh-us-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.dsh-us-card{border:.5px solid var(--dsw-alias-settings-card-stroke,#d8dee4);background:var(--dsw-alias-settings-card-fill,#fff);border-radius:12px;padding:12px 14px}
-.dsh-us-card-label{color:var(--dsw-alias-label-secondary,#59636e);font-size:12px}
-.dsh-us-card-value{margin-top:4px;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.dsh-us-card-hint{margin-top:2px;color:var(--dsw-alias-label-tertiary,#818b98);font-size:11px}
+.dsh-us-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.dsh-us-sum{display:flex;flex-direction:column;gap:6px;border:.5px solid var(--dsw-alias-settings-card-stroke,#d8dee4);background:var(--dsw-alias-settings-card-fill,#fff);border-radius:12px;padding:12px 14px}
+.dsh-us-sum-today{border-color:var(--dsw-alias-brand-primary,#4d6bfe)}
+.dsh-us-sum-head{display:flex;align-items:center;gap:8px;color:var(--dsw-alias-label-secondary,#59636e);font-size:12px}
+.dsh-us-sum-value{font-size:26px;font-weight:600;line-height:1.15;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.dsh-us-sum-unit{margin-left:5px;color:var(--dsw-alias-label-tertiary,#818b98);font-size:12px;font-weight:400;letter-spacing:0}
+.dsh-us-sum-sub{color:var(--dsw-alias-label-secondary,#59636e);font-size:12px}
+.dsh-us-sum-split{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:2px;padding-top:8px;border-top:.5px dashed var(--dsw-alias-border-l2,#d8dee4)}
+.dsh-us-sum-item{display:inline-flex;align-items:baseline;gap:5px;font-size:12px;font-variant-numeric:tabular-nums}
+.dsh-us-sum-item span{color:var(--dsw-alias-label-tertiary,#818b98)}
+.dsh-us-sum-item b{font-weight:600}
+.dsh-us-quota{display:flex;flex-direction:column;gap:10px;border:.5px solid var(--dsw-alias-settings-card-stroke,#d8dee4);background:var(--dsw-alias-settings-card-fill,#fff);border-radius:12px;padding:12px 14px}
+.dsh-us-quota-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.dsh-us-quota-title{margin:0;font-size:13px;font-weight:600}
+.dsh-us-quota-note{color:var(--dsw-alias-label-tertiary,#818b98);font-size:11px}
+.dsh-us-quota-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.dsh-us-quota-item{display:flex;flex-direction:column;gap:5px;min-width:0}
+.dsh-us-quota-label{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary,#59636e)}
+.dsh-us-quota-value{color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;font-variant-numeric:tabular-nums}
+.dsh-us-quota-track{height:6px;border-radius:999px;background:var(--dsw-alias-bg-l2,#eef1f4);overflow:hidden}
+.dsh-us-quota-fill{height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary,#4d6bfe)}
+.dsh-us-quota-reset{color:var(--dsw-alias-label-tertiary,#818b98);font-size:11px;font-variant-numeric:tabular-nums}
+@media (max-width:560px){.dsh-us-quota-row{grid-template-columns:1fr}}
 .dsh-us-meta{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;color:var(--dsw-alias-label-secondary,#59636e);font-size:12px}
 .dsh-us-meta strong{color:var(--dsw-alias-label-primary,#1f2328);font-weight:600}
 .dsh-us-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
@@ -45,7 +70,12 @@ window.__ModuleLoader__.load({
 .dsh-us-group-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px}
 .dsh-us-group-title{margin:0;font-size:13px;font-weight:600}
 .dsh-us-group-note{color:var(--dsw-alias-label-tertiary,#818b98);font-size:11px}
-.dsh-us-chart{display:flex;align-items:flex-end;gap:3px;height:200px;padding:10px 2px 0}
+.dsh-us-plot{position:relative}
+.dsh-us-chart{display:flex;align-items:flex-end;gap:3px;height:200px;padding:0 2px}
+.dsh-us-avg{position:absolute;left:2px;right:2px;height:0;border-top:1px dashed var(--dsw-alias-border-l2,#d8dee4);pointer-events:none}
+.dsh-us-col-today .dsh-us-stack{box-shadow:inset 0 0 0 1px var(--dsw-alias-brand-primary,#4d6bfe)}
+.dsh-us-axis-today{color:var(--dsw-alias-brand-primary,#4d6bfe);font-weight:600}
+.dsh-us-readout-delta{color:var(--dsw-alias-label-tertiary,#818b98)}
 .dsh-us-col{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;cursor:default}
 .dsh-us-stack{display:flex;flex-direction:column-reverse;width:100%;height:100%;border-radius:4px 4px 2px 2px;overflow:hidden}
 .dsh-us-col:hover .dsh-us-stack{filter:brightness(1.06)}
@@ -100,6 +130,15 @@ window.__ModuleLoader__.load({
       return numberFormat.format(Number.isFinite(number) ? Math.round(number) : 0)
     }
 
+    /** Today's UTC date key, matching the Console's own daily boundary. */
+    function utcDateString(date) {
+      return date.toISOString().slice(0, 10)
+    }
+
+    function signedPercent(value) {
+      return `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`
+    }
+
     function formatMoney(microCents) {
       return `$${((Number(microCents) || 0) / 1e8).toFixed(2)}`
     }
@@ -123,10 +162,15 @@ window.__ModuleLoader__.load({
      * and the settings page, so they never fetch or disagree independently.
      */
     function createController() {
-      let snapshot = { open: false, phase: 'idle', data: undefined, error: undefined, refreshing: false, metric: 'total' }
+      let snapshot = {
+        open: false, phase: 'idle', data: undefined, error: undefined,
+        refreshing: false, metric: 'total', quota: undefined, quotaError: undefined,
+      }
       const listeners = new Set()
       let inflight
       let lastFetchAt = 0
+      let quotaInflight
+      let quotaTimer
 
       const emit = () => {
         for (const listener of [...listeners]) listener()
@@ -170,10 +214,43 @@ window.__ModuleLoader__.load({
         return Promise.resolve()
       }
 
+      /**
+       * Quota windows change every minute and are independent of the 30-day
+       * token aggregates, so they get their own endpoint and poll interval.
+       */
+      const loadQuota = () => {
+        if (quotaInflight !== undefined) return quotaInflight
+        quotaInflight = fetch(new URL('usage-stats/api/quota', document.baseURI).href)
+          .then(async (response) => {
+            const payload = await response.json().catch(() => undefined)
+            if (!response.ok || payload === undefined || payload.ok !== true) {
+              throw new Error(payload === undefined ? `HTTP ${response.status}` : (payload.error?.message ?? `HTTP ${response.status}`))
+            }
+            set({ quota: payload.data, quotaError: undefined })
+          })
+          .catch((error) => {
+            set({ quotaError: error instanceof Error ? error.message : String(error) })
+          })
+          .finally(() => {
+            quotaInflight = undefined
+          })
+        return quotaInflight
+      }
+
       return {
         subscribe(listener) {
           listeners.add(listener)
-          return () => listeners.delete(listener)
+          if (quotaTimer === undefined) {
+            void loadQuota()
+            quotaTimer = setInterval(() => { void loadQuota() }, 60_000)
+          }
+          return () => {
+            listeners.delete(listener)
+            if (listeners.size === 0 && quotaTimer !== undefined) {
+              clearInterval(quotaTimer)
+              quotaTimer = undefined
+            }
+          }
         },
         getSnapshot() {
           return snapshot
@@ -202,18 +279,115 @@ window.__ModuleLoader__.load({
       }
     }
 
-    function ChartIcon() {
-      return h('svg', { className: 'dsh-us-footbtn-icon', width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' },
-        h('rect', { x: 3, y: 13, width: 4, height: 8, rx: 1, fill: 'currentColor', opacity: .45 }),
-        h('rect', { x: 10, y: 8, width: 4, height: 13, rx: 1, fill: 'currentColor', opacity: .7 }),
-        h('rect', { x: 17, y: 3, width: 4, height: 18, rx: 1, fill: 'currentColor' }))
+    /** `MM-DD HH:mm` in the reader's local time zone. */
+    function formatReset(resetsAt) {
+      const date = new Date(resetsAt)
+      if (!Number.isFinite(date.getTime())) return '--'
+      const pad = (value) => String(value).padStart(2, '0')
+      return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
     }
 
-    function Card(props) {
-      return h('div', { className: 'dsh-us-card' },
-        h('div', { className: 'dsh-us-card-label' }, props.label),
-        h('div', { className: 'dsh-us-card-value', title: props.title }, compactTokens(props.value)),
-        props.hint === undefined ? null : h('div', { className: 'dsh-us-card-hint' }, props.hint))
+    function clockOf(iso) {
+      const formatted = formatReset(iso)
+      return formatted.includes(' ') ? formatted.split(' ')[1] : formatted
+    }
+
+    function quotaPercent(quota, id) {
+      const percent = Number(quota?.windows?.[id]?.percent)
+      return Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0
+    }
+
+    /** One compact sentence per window, used by the sidebar button tooltip. */
+    function quotaTitle(quota) {
+      if (quota === undefined) return ''
+      return QUOTA_WINDOWS.map(item => {
+        const window = quota.windows?.[item.id]
+        const value = window?.status === 'rate-limited' ? '已用尽' : `已用 ${Math.round(quotaPercent(quota, item.id))}%`
+        return `${item.label}${value}（${formatReset(window?.resetsAt)} 重置）`
+      }).join(' · ')
+    }
+
+    /**
+     * Sidebar icon: two half-rings. The top arc is the 5-hour window and the
+     * bottom arc the monthly window, both filled by their used percentage. The
+     * arcs stop ~18° short of the horizontal so the halves stay readable apart.
+     */
+    function UsageRing(props) {
+      const quota = props.quota
+      const arc = (path, id, track) => h('path', {
+        d: path,
+        pathLength: 100,
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: 3,
+        strokeLinecap: 'round',
+        strokeOpacity: track ? .22 : 1,
+        strokeDasharray: track ? undefined : `${quotaPercent(quota, id)} 100`,
+      })
+      const top = 'M 3.44 9.22 A 9 9 0 0 1 20.56 9.22'
+      const bottom = 'M 3.44 14.78 A 9 9 0 0 0 20.56 14.78'
+      return h('svg', { className: 'dsh-us-footbtn-icon', width: 26, height: 26, viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+        arc(top, 'rolling', true),
+        arc(top, 'rolling', false),
+        arc(bottom, 'monthly', true),
+        arc(bottom, 'monthly', false))
+    }
+
+    function SummaryBlock(props) {
+      return h('div', { className: `dsh-us-sum${props.today ? ' dsh-us-sum-today' : ''}` },
+        h('div', { className: 'dsh-us-sum-head' },
+          h('span', null, props.label)),
+        h('div', { className: 'dsh-us-sum-value' },
+          compactTokens(props.value),
+          h('span', { className: 'dsh-us-sum-unit' }, 'tokens')),
+        h('div', { className: 'dsh-us-sum-sub' }, props.sub),
+        h('div', { className: 'dsh-us-sum-split' },
+          props.splits.map(item => h('span', { key: item.label, className: 'dsh-us-sum-item' },
+            h('span', { title: item.hint }, item.label),
+            h('b', null, compactTokens(item.value))))))
+    }
+
+    /**
+     * Two blocks side by side: the whole 30-day window on the left and today's
+     * partial UTC day on the right, so both totals are read at a glance.
+     */
+    function SummarySection(data) {
+      const todayDate = utcDateString(new Date())
+      const rows = data.daily ?? []
+      const todayRow = rows.find(row => row.date === todayDate) ?? rows[rows.length - 1]
+      const todayTotals = todayRow === undefined ? undefined : todayRow.totals
+      const pastRows = rows.filter(row => row !== todayRow)
+      const average = pastRows.length === 0
+        ? 0
+        : pastRows.reduce((sum, row) => sum + metricOf(row.totals, 'total'), 0) / pastRows.length
+      const todayTotal = metricOf(todayTotals, 'total')
+      const todayDateKey = todayRow === undefined ? todayDate : todayRow.date
+      const todayLabel = `${todayDateKey === todayDate ? '今日' : '最近一日'} · ${todayDateKey.slice(5)}（UTC）`
+      const share = data.summary.total === 0 ? 0 : (todayTotal / data.summary.total) * 100
+      const delta = average === 0 ? undefined : ((todayTotal - average) / average) * 100
+      const todaySub = [`占 30 天 ${share.toFixed(1)}%`]
+      if (delta !== undefined) todaySub.push(`较前 ${pastRows.length} 天日均 ${signedPercent(delta)}`)
+      const splitsOf = totals => [
+        { label: '输入', value: metricOf(totals, 'input'), hint: '输入不含缓存读写' },
+        { label: '输出', value: metricOf(totals, 'output'), hint: '输出含 reasoning' },
+        { label: '缓存读', value: metricOf(totals, 'cacheRead'), hint: '缓存读取的 token' },
+      ]
+      return h('div', { className: 'dsh-us-summary' },
+        h(SummaryBlock, {
+          key: 'window',
+          label: `最近 ${data.days ?? 30} 天累计`,
+          value: data.summary.total,
+          sub: `请求 ${fullNumber(data.summary.requests)} 次 · ${data.summary.models ?? data.models.length} 个模型`,
+          splits: splitsOf(data.summary),
+        }),
+        h(SummaryBlock, {
+          key: 'today',
+          today: true,
+          label: todayLabel,
+          value: todayTotal,
+          sub: todaySub.join(' · '),
+          splits: splitsOf(todayTotals),
+        }))
     }
 
     function LoadingRow(props) {
@@ -294,6 +468,11 @@ window.__ModuleLoader__.load({
           return { date: row.date, segments, total }
         })
         const max = Math.max(1, ...points.map(point => point.total))
+        const todayDate = utcDateString(new Date())
+        const past = points.filter(point => point.date !== todayDate)
+        const average = past.length === 0 ? 0 : past.reduce((sum, point) => sum + point.total, 0) / past.length
+        /* The tallest bar keeps headroom, so bars and the average line share one value scale. */
+        const chartMax = max * 1.08
         const grand = points.reduce((sum, point) => sum + point.total, 0)
         const legend = series.map((seriesItem) => {
           const value = seriesItem.id === '__other__'
@@ -301,16 +480,21 @@ window.__ModuleLoader__.load({
             : metricOfModel(data.models.find(model => model.id === seriesItem.id), metric)
           return { ...seriesItem, value, share: grand === 0 ? 0 : (value / grand) * 100 }
         })
-        return { points, max, legend }
+        return { points, max, chartMax, average, pastCount: past.length, todayDate, legend }
       }, [data, metric])
 
       const activeIndex = hovered === undefined ? layout.points.length - 1 : Math.min(hovered, layout.points.length - 1)
       const active = layout.points[activeIndex]
       const metricLabel = METRICS.find(item => item.id === metric)?.label ?? '总计'
+      const activeDelta = active === undefined || layout.average === 0
+        ? undefined
+        : ((active.total - layout.average) / layout.average) * 100
 
       const readout = active === undefined ? null : h('div', { className: 'dsh-us-readout' },
-        h('strong', null, active.date),
+        h('strong', null, active.date === layout.todayDate ? `${active.date}（今日，UTC）` : active.date),
         h('span', null, `合计 ${fullNumber(active.total)}`),
+        activeDelta === undefined ? null : h('span', { className: 'dsh-us-readout-delta' },
+          `较前 ${layout.pastCount} 天日均 ${signedPercent(activeDelta)}`),
         active.segments.filter(segment => segment.value > 0).map(segment => h('span', {
           key: segment.id,
           className: 'dsh-us-readout-item',
@@ -321,30 +505,41 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsh-us-group' },
         h('div', { className: 'dsh-us-group-head' },
           h('h3', { className: 'dsh-us-group-title' }, `日用量（${metricLabel}）`),
-          h('span', { className: 'dsh-us-group-note' }, `峰值 ${compactTokens(layout.max)} · Top${TOP_MODELS} 模型 + 其他`)),
-        h('div', { className: 'dsh-us-chart', onMouseLeave: () => setHovered(undefined) },
-          layout.points.map((point, index) => {
-            const segments = point.segments.filter(segment => segment.value > 0)
-            const total = point.total
-            return h('div', {
-              key: point.date,
-              className: `dsh-us-col${index === activeIndex ? ' dsh-us-col-active' : ''}`,
-              onMouseEnter: () => setHovered(index),
-              role: 'img',
-              'aria-label': `${point.date} 合计 ${fullNumber(total)}`,
-            },
-            total === 0
-              ? h('div', { className: 'dsh-us-seg-empty' })
-              : h('div', { className: 'dsh-us-stack' },
-                segments.map(segment => h('div', {
-                  key: segment.id,
-                  className: 'dsh-us-seg',
-                  style: { height: `${(segment.value / layout.max) * 100}%`, background: segment.color },
-                }))))
-          })),
+          h('span', { className: 'dsh-us-group-note' },
+            layout.average === 0
+              ? `峰值 ${compactTokens(layout.max)} · Top${TOP_MODELS} 模型 + 其他`
+              : `峰值 ${compactTokens(layout.max)} · 日均 ${compactTokens(layout.average)} · Top${TOP_MODELS} 模型 + 其他`)),
+        h('div', { className: 'dsh-us-plot' },
+          h('div', { className: 'dsh-us-chart', onMouseLeave: () => setHovered(undefined) },
+            layout.points.map((point, index) => {
+              const segments = point.segments.filter(segment => segment.value > 0)
+              const total = point.total
+              return h('div', {
+                key: point.date,
+                className: `dsh-us-col${index === activeIndex ? ' dsh-us-col-active' : ''}${point.date === layout.todayDate ? ' dsh-us-col-today' : ''}`,
+                onMouseEnter: () => setHovered(index),
+                role: 'img',
+                'aria-label': `${point.date} 合计 ${fullNumber(total)}`,
+              },
+              total === 0
+                ? h('div', { className: 'dsh-us-seg-empty' })
+                : h('div', { className: 'dsh-us-stack' },
+                  segments.map(segment => h('div', {
+                    key: segment.id,
+                    className: 'dsh-us-seg',
+                    style: { height: `${(segment.value / layout.chartMax) * 100}%`, background: segment.color },
+                  }))))
+            })),
+          layout.average > 0 ? h('div', {
+            className: 'dsh-us-avg',
+            title: `过去 ${layout.pastCount} 天日均 ${fullNumber(layout.average)}`,
+            style: { bottom: `${(layout.average / layout.chartMax) * 100}%` },
+          }) : null),
         h('div', { className: 'dsh-us-axis' },
-          layout.points.map((point, index) => h('span', { key: point.date },
-            index % 5 === 0 || index === layout.points.length - 1 ? point.date.slice(5) : ''))),
+          layout.points.map((point, index) => h('span', {
+            key: point.date,
+            className: point.date === layout.todayDate ? 'dsh-us-axis-today' : undefined,
+          }, index % 5 === 0 || index === layout.points.length - 1 ? point.date.slice(5) : ''))),
         readout,
         h('div', { className: 'dsh-us-legend' },
           layout.legend.map(item => h('span', { key: item.id, className: 'dsh-us-legend-item' },
@@ -360,11 +555,37 @@ window.__ModuleLoader__.load({
         data.warnings.map((warning, index) => h('div', { key: index }, `· ${warning}`)))
     }
 
-    function Footnote() {
-      return h('div', { className: 'dsh-us-note' },
-        '数据来源：opencode.ai Console API（activity/go、request-logs，Go 计划流量）。',
-        'token 为计费口径：输入不含缓存读写，输出含 reasoning；按 UTC 日聚合。',
-        'Host 端按天缓存：已完成日期直接命中，只有今天（和昨天收尾）会短 TTL 重拉；刷新按钮会强制补拉今天。')
+    /**
+     * Go plan quota: one row with the 5-hour, weekly and monthly windows. This
+     * refreshes on its own minute cadence, independent of the token aggregates.
+     */
+    function QuotaSection(props) {
+      const quota = props.quota
+      if (quota === undefined) {
+        if (props.error === undefined) return null
+        return h('div', { className: 'dsh-us-quota' },
+          h('div', { className: 'dsh-us-quota-head' },
+            h('h3', { className: 'dsh-us-quota-title' }, 'OpenCode Go 额度'),
+            h('span', { className: 'dsh-us-quota-note' }, '读取失败')),
+          h('div', { className: 'dsh-us-note' }, props.error))
+      }
+      return h('div', { className: 'dsh-us-quota' },
+        h('div', { className: 'dsh-us-quota-head' },
+          h('h3', { className: 'dsh-us-quota-title' }, 'OpenCode Go 额度'),
+          h('span', { className: 'dsh-us-quota-note' }, `每分钟刷新 · 更新于 ${clockOf(quota.asOf)}`)),
+        h('div', { className: 'dsh-us-quota-row' },
+          QUOTA_WINDOWS.map(item => {
+            const window = quota.windows?.[item.id]
+            const percent = quotaPercent(quota, item.id)
+            return h('div', { key: item.id, className: 'dsh-us-quota-item' },
+              h('div', { className: 'dsh-us-quota-label' },
+                h('span', null, item.label),
+                h('span', { className: 'dsh-us-quota-value' },
+                  window?.status === 'rate-limited' ? '已用尽' : `已用 ${Math.round(percent)}%`)),
+              h('div', { className: 'dsh-us-quota-track' },
+                h('div', { className: 'dsh-us-quota-fill', style: { width: `${percent}%` } })),
+              h('div', { className: 'dsh-us-quota-reset' }, `重置 ${formatReset(window?.resetsAt)}`))
+          })))
     }
 
     /** The shared dashboard body: summary, daily stacked chart and legend. */
@@ -400,7 +621,7 @@ window.__ModuleLoader__.load({
       if (snapshot.error !== undefined) {
         parts.push(h('div', { key: 'err', className: 'dsh-us-error', role: 'alert' }, snapshot.error))
       }
-      parts.push(h(SummaryCards, { key: 'cards', ...data }))
+      parts.push(h(SummarySection, { key: 'summary', ...data }))
       parts.push(h(MetaLine, { key: 'meta', ...data }))
       parts.push(h(MetricControls, { key: 'metric', metric: snapshot.metric, onChange: (value) => controller.setMetric(value) }))
       if (data.summary.total === 0) {
@@ -413,7 +634,7 @@ window.__ModuleLoader__.load({
         parts.push(h('div', { key: 'refreshing', className: 'dsh-us-note' }, '正在后台刷新今天的数据…'))
       }
       parts.push(h(Warnings, { key: 'warnings', ...data }))
-      parts.push(h(Footnote, { key: 'note' }))
+      parts.push(h(QuotaSection, { key: 'quota', quota: snapshot.quota, error: snapshot.quotaError }))
       return parts
     }
 
@@ -439,7 +660,11 @@ window.__ModuleLoader__.load({
       const controller = props.controller
       const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
       const total = snapshot.data?.summary?.total
-      const hint = `用量统计${total === undefined ? '' : ` · 近30天 ${compactTokens(total)}`}（Ctrl+Shift+G）`
+      const quota = snapshot.quota
+      const hintParts = ['GO 用量']
+      if (quota !== undefined) hintParts.push(quotaTitle(quota))
+      if (total !== undefined) hintParts.push(`近30天 ${compactTokens(total)} tokens`)
+      const hint = `${hintParts.join(' · ')}（Ctrl+Shift+G）`
       return h('div', null,
         h('style', null, CSS),
         h('button', {
@@ -450,8 +675,8 @@ window.__ModuleLoader__.load({
           'aria-label': hint,
           onClick: () => controller.toggle(),
         },
-        h(ChartIcon, null),
-        props.wide === false ? null : h('span', null, '用量')))
+        h(UsageRing, { quota }),
+        props.wide === false ? null : h('span', null, 'GO 用量')))
     }
 
     function OverlayHost(props) {

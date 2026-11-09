@@ -104,8 +104,10 @@ function renderNode(node) {
 }
 const h = fakeReact.createElement
 
-/* ---- fixture payload -------------------------------------------------- */
-const days = utcDays(30, Date.UTC(2026, 10, 9))
+/* ---- fixture payload (window ends today in UTC, like the Host payload) - */
+const now = new Date()
+const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+const days = utcDays(30, todayUtc)
 const itemsByDay = new Map()
 days.forEach((day, index) => {
   const records = [
@@ -118,7 +120,7 @@ days.forEach((day, index) => {
 })
 const aggregated = aggregateUsage(days, itemsByDay)
 const data = {
-  asOf: '2026-11-09T03:00:00.000Z',
+  asOf: new Date(todayUtc + 3 * 60 * 60 * 1000).toISOString(),
   dayBoundary: 'UTC',
   days: 30,
   keySource: 'render-check',
@@ -131,8 +133,21 @@ const data = {
   cache: { fetchedDays: 0, cachedDays: 30 },
 }
 
+const quota = {
+  asOf: new Date(todayUtc + 4 * 60 * 60 * 1000 + 12 * 60 * 1000).toISOString(),
+  keySource: 'render-check',
+  windows: {
+    rolling: { status: 'ok', percent: 4, resetsAt: new Date(todayUtc + 6 * 60 * 60 * 1000).toISOString() },
+    weekly: { status: 'ok', percent: 1, resetsAt: new Date(todayUtc + 7 * 86_400_000).toISOString() },
+    monthly: { status: 'ok', percent: 21, resetsAt: new Date(todayUtc + 10 * 86_400_000).toISOString() },
+  },
+}
+
 function makeController(overrides) {
-  const snapshot = { open: false, phase: 'ready', data, error: undefined, refreshing: false, metric: 'total', ...overrides }
+  const snapshot = {
+    open: false, phase: 'ready', data, error: undefined, refreshing: false, metric: 'total',
+    quota, quotaError: undefined, ...overrides,
+  }
   return {
     subscribe: () => () => {},
     getSnapshot: () => snapshot,
@@ -162,7 +177,15 @@ assert('settings has legend swatches', settingsMarkup.includes('dsh-us-swatch'))
 assert('settings legend includes model-a', settingsMarkup.includes('model-a'))
 assert('settings legend merges the fourth model into 其他', settingsMarkup.includes('其他'))
 assert('settings renders no HTML table', !settingsMarkup.includes('<table'))
-assert('settings renders summary cards', settingsMarkup.includes('总 Token'))
+assert('settings shows the 30-day window summary', settingsMarkup.includes('最近 30 天累计'))
+assert('settings shows the today summary block', settingsMarkup.includes('（UTC）') && settingsMarkup.includes('dsh-us-sum-today'))
+assert('settings compares today against the window summary', settingsMarkup.includes('占 30 天'))
+assert('settings marks today in the axis', settingsMarkup.includes('dsh-us-axis-today'))
+assert('settings draws the average reference line', settingsMarkup.includes('class="dsh-us-avg"'))
+assert('settings renders the quota row', settingsMarkup.includes('OpenCode Go 额度') && settingsMarkup.includes('5 小时') && settingsMarkup.includes('每周') && settingsMarkup.includes('每月'))
+assert('settings shows quota percentages', settingsMarkup.includes('已用 21%') && settingsMarkup.includes('已用 4%'))
+assert('settings shows quota reset times', settingsMarkup.includes('重置 ') && settingsMarkup.includes('每分钟刷新'))
+assert('settings dropped the data-source footnote', !settingsMarkup.includes('数据来源'))
 
 const metricMarkup = renderNode(h(componentOf('settings.section'), { controller: makeController({ metric: 'cacheRead' }) }))
 assert('metric switch relabels the chart', metricMarkup.includes('日用量（缓存读）'))
@@ -176,6 +199,9 @@ const footerWide = renderSlot('sidebar.footer.action', { wide: true })
 const footerRail = renderSlot('sidebar.footer.action', { wide: false })
 assert('wide footer shows its label', footerWide.includes('用量'))
 assert('rail footer shrinks to the icon', footerRail.includes('data-wide="false"'))
+assert('footer icon draws two half-ring arcs', [...footerWide.matchAll(/<path/g)].length === 4)
+assert('footer top arc follows the 5-hour window', footerWide.includes('strokeDasharray="4 100"'))
+assert('footer bottom arc follows the monthly window', footerWide.includes('strokeDasharray="21 100"'))
 
 const heights = [...settingsMarkup.matchAll(/class="dsh-us-seg" style="height:([0-9.]+)%/g)].map(match => Number(match[1]))
 assert('chart paints at least one segment', heights.length > 0)

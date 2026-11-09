@@ -38,6 +38,8 @@ export const inject = ['webServer', 'connection']
 
 const CONSOLE_ORIGIN = 'https://opencode.ai'
 const CONSOLE_API = '/console/api'
+/** Go plan quota windows (5-hour / weekly / monthly), served by the Go endpoint. */
+const QUOTA_URL = 'https://opencode.ai/zen/go/v1/usage'
 const DEFAULT_DAYS = 30
 const MAX_DAYS = 30
 const EXPORT_PAGE_LIMIT = 1000
@@ -50,6 +52,7 @@ const CACHE_FILE = 'day-aggregates.v1.json'
 const TODAY_TTL_MS = 10 * 60 * 1000
 const YESTERDAY_TTL_MS = 2 * 60 * 60 * 1000
 const GO_TTL_MS = 60 * 1000
+const QUOTA_TTL_MS = 60 * 1000
 const WARM_INTERVAL_MS = 10 * 60 * 1000
 
 /** One Console JSON call; non-2xx becomes an error carrying the status. */
@@ -74,6 +77,56 @@ async function consoleFetch(path, key) {
     throw error
   }
   return response.json()
+}
+
+/** One Go quota call (`/zen/go/v1/usage`); non-2xx becomes an error carrying the status. */
+async function quotaFetch(key) {
+  const response = await fetch(QUOTA_URL, {
+    headers: {
+      authorization: `Bearer ${key}`,
+      accept: 'application/json',
+      'user-agent': 'dsh-opencode-go-usage/0.6.0',
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!response.ok) {
+    let detail = ''
+    try {
+      detail = (await response.text()).slice(0, 300)
+    } catch {
+      /* the body is optional diagnostic text */
+    }
+    const error = new Error(`Go 额度接口 ${response.status}${detail === '' ? '' : `: ${detail}`}`)
+    error.status = response.status
+    throw error
+  }
+  return response.json()
+}
+
+/**
+ * Validate one quota window. Missing or malformed statistics fail the whole
+ * quota read instead of being turned into 0%, which would read as "unused".
+ */
+export function parseQuotaWindow(row) {
+  if (row === null || typeof row !== 'object') return undefined
+  const status = row.status === 'rate-limited' ? 'rate-limited' : row.status === 'ok' ? 'ok' : undefined
+  const percent = Number(row.percent)
+  const resetsAt = typeof row.resetsAt === 'string' && Number.isFinite(Date.parse(row.resetsAt)) ? row.resetsAt : undefined
+  if (status === undefined || !Number.isFinite(percent) || percent < 0 || percent > 100 || resetsAt === undefined) return undefined
+  return { status, percent, resetsAt }
+}
+
+/** Extract the rolling/weekly/monthly windows from the Go quota response. */
+export function parseQuota(payload) {
+  const usage = payload?.usage ?? payload
+  if (usage === null || typeof usage !== 'object') return undefined
+  const windows = {}
+  for (const key of ['rolling', 'weekly', 'monthly']) {
+    const parsed = parseQuotaWindow(usage[key])
+    if (parsed === undefined) return undefined
+    windows[key] = parsed
+  }
+  return windows
 }
 
 /** `$DSH_HOME`, falling back to `~/.dsh` when the variable is absent. */
@@ -543,6 +596,30 @@ function writeJson(res, status, payload) {
  */
 export function apply(ctx) {
   let inflight
+  let quotaCache = { at: 0, data: undefined }
+  let quotaInflight
+
+  /** Quota is cheap but polled every minute by the UI, so cache it for one minute. */
+  const readQuota = async () => {
+    if (quotaCache.data !== undefined && Date.now() - quotaCache.at < QUOTA_TTL_MS) return quotaCache.data
+    if (quotaInflight !== undefined) return quotaInflight
+    quotaInflight = (async () => {
+      try {
+        const { key, source } = resolveApiKey()
+        const windows = parseQuota(await quotaFetch(key))
+        if (windows === undefined) {
+          const error = new Error('OpenCode Go 额度响应格式无法识别')
+          error.code = 'invalid-response'
+          throw error
+        }
+        quotaCache = { at: Date.now(), data: { asOf: new Date().toISOString(), keySource: source, windows } }
+        return quotaCache.data
+      } finally {
+        quotaInflight = undefined
+      }
+    })()
+    return quotaInflight
+  }
 
   const load = async (days, options = {}) => {
     if (inflight !== undefined && inflight.days === days && options.force !== true && options.full !== true) return inflight.promise
@@ -562,12 +639,28 @@ export function apply(ctx) {
         return
       }
       const url = new URL(req.url ?? '/', 'http://dsh.internal')
-      if (url.pathname !== '/usage-stats/api/data') {
+      const isData = url.pathname === '/usage-stats/api/data'
+      const isQuota = url.pathname === '/usage-stats/api/quota'
+      if (!isData && !isQuota) {
         writeJson(res, 404, { ok: false, error: { code: 'not-found', message: 'not found' } })
         return
       }
       if (req.method !== 'GET') {
         writeJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } })
+        return
+      }
+      if (isQuota) {
+        try {
+          writeJson(res, 200, { ok: true, data: await readQuota() })
+        } catch (error) {
+          writeJson(res, 502, {
+            ok: false,
+            error: {
+              code: typeof error?.code === 'string' ? error.code : 'upstream-failed',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          })
+        }
         return
       }
       const requested = Number(url.searchParams.get('days') ?? DEFAULT_DAYS)
