@@ -1,118 +1,98 @@
 # dsh-opencode-go-usage
 
-DSH 插件「用量统计」：从 **OpenCode Console 官方接口**拉取最近 30 天的**分模型日消耗**
-（token），覆盖用该 OpenCode Go API Key 的所有客户端流量。可从左侧栏按钮 / 快捷键直接
-打开浮层面板，也可在**设置**里查看完整页面。
+DSH（DeepSeek Harness）Web GUI 插件：查看 **OpenCode Go 订阅**最近 30 天的**分模型 token 消耗**，
+以及 5 小时 / 每周 / 每月额度余量。入口在设置页、左侧栏按钮和悬停卡，数据直接来自
+OpenCode Console 官方接口。
 
-仓库 <https://github.com/Donotinvert/opencode-go-usage-stats>；目录与插件包名均为
-`dsh-opencode-go-usage`（profile 挂载标识与客户端 bundle id）。
+> 维护者与 AI 代理：开始改动前请先读 [AGENTS.md](./AGENTS.md)，其中记录数据口径、
+> DSH 插件契约、缓存设计与验证方式。
 
-## 快速查看（v0.3.0+）
+![用量统计浮层面板](docs/screenshots/panel.png)
 
-- **左侧栏底部「GO 用量」按钮**（设置按钮上方）：任意会话一键打开浮层大面板；Esc、点遮罩
-  或「关闭」退出。图标是两个半环：**上半环 = 5 小时额度剩余**、**下半环 = 本月额度剩余**
-  （白色 = 剩余，空白 = 已用，与面板额度条一致）。**悬停图标**会在右侧弹出 Codex 风格的紧凑
-  额度卡（5-hour / Weekly / Monthly 三项剩余百分比 + 「管理用量」），不再显示文字 tooltip。
-- **快捷键 `Ctrl+Shift+G`**（macOS 为 `Cmd+Shift+G`）开关面板；可在「设置 → 快捷键」
-  里改键或查看冲突。
-- 浮层、设置页共用同一份数据与渲染，不会各自重复拉取。
-- Host 端按天落盘缓存：`$DSH_HOME/cache/dsh-opencode-go-usage/day-aggregates.v1.json`。
-  已完成日期直接复用，只有今天（和昨天收尾）会短 TTL 重拉；插件启动 1.5 秒后开始后台
-  预热，之后每 10 分钟刷新今天。因此打开面板通常低于 1 秒。
-- 额度（5 小时 / 每周 / 每月）每分钟单独刷新，与 30 天 token 统计互不影响。
-- 首次安装或缓存为空时仍需拉一次 30 天（约 4–12 秒，取决于网络）。
+## 功能
 
-## 它能看什么
+- **日用量堆叠柱状图**：最近 30 天每天一根柱，Top3 模型 + 「其他」最多 4 个系列；
+  口径可切换总计 / 输入 / 输出 / 缓存读；悬停任意柱子看当天明细。
+- **汇总块**：最近 30 天累计（token、请求数、模型数、分项）与今日（UTC）用量及对比。
+- **OpenCode Go 额度**：5 小时 / 每周 / 每月三条进度条，白色描边 + 透明底，
+  **白色 = 剩余额度，空白 = 已用**；每分钟刷新。
+- **多种入口**
+  - 左侧栏底部「GO 用量」按钮，点击打开浮层大面板；
+  - 快捷键 `Ctrl+Shift+G`（macOS `Cmd+Shift+G`）开关面板；
+  - 悬停按钮在右侧弹出 Codex 风格紧凑卡：`Usage source: OpenCode Go` +
+    三项 `% left` + 「管理用量」；
+  - 设置 → 用量统计（完整页面，共用同一份数据）。
+- **快速打开**：Host 按 UTC 日缓存已完成日期的聚合结果并后台预热，缓存命中时打开低于 1 秒；
+  首次安装仍需拉取 30 天日志（约 4–12 秒）。
 
-- **顶部两个汇总块**：左侧「最近 30 天累计」给总 token、请求数、模型数及输入/输出/缓存读；
-  右侧「今日（UTC）」给当天总 token 及同样的分项，并标注「占 30 天 X%」「较前 N 天日均
-  ±X%」，两块并排，今日与累计一眼对比。
-- **日用量堆叠柱状图**：最近 30 天每天一根柱，柱高为该天所选口径（总计 / 输入 / 输出 /
-  缓存读）的 token 量；虚线为「过去 N 天日均」参考线，今天的柱子描边、日期标签高亮。
-- 每根柱最多 4 个子项：用量前 3 的模型 + 「其他」（其余模型合计）；Top3 按窗口内总 token
-  排名，切换口径时颜色/名次保持稳定。
-- 悬停任意一根柱子可看当天合计、较日均幅度与各模型明细；图例给出各系列总量与占比。
-- **底部额度区**：一行三条进度条（5 小时 / 每周 / 每月），显示已用百分比与重置时间，
-  每分钟刷新。进度条为白色描边 + 透明底：**白色填充 = 剩余额度，空白 = 已使用**；
-  悬停可看「已用 X%，白色填充为剩余额度」。
-- 官方 Go 计费周期（`/activity/go`）的累计 token、请求数和额度消耗（美元）。
-- 按 UTC 日聚合（与官网图表一致）。
+![额度卡](docs/screenshots/quota.png)
 
-数据来源：`GET https://opencode.ai/console/api/activity/go` 与
-`GET /console/api/request-logs/export?since=…&until=…&format=json`（逐日请求日志，
-`request-logs` 保留最近 30 天）；额度来自 `GET https://opencode.ai/zen/go/v1/usage`。
-导出单页上限 1000 条；触顶的日期会改用列表接口的游标分页补齐，避免大用量日被少算。
-Host 端按天缓存，「刷新」只强制补拉今天/昨天；调试可用
-`/usage-stats/api/data?days=30&full=1` 全量重拉，额度接口为
-`/usage-stats/api/quota`。
+## 数据来源与隐私
 
-## 认证
+- 30 天 token 明细：`GET https://opencode.ai/console/api/request-logs/export`（按 UTC 日窗口）。
+- 官方 Go 周期图：`GET https://opencode.ai/console/api/activity/go`。
+- 额度余量：`GET https://opencode.ai/zen/go/v1/usage`。
+- API Key 仅在本机 DSH Host 进程内读取（默认从 `$DSH_HOME/.credentials.yaml` 或
+  `DSH_OPENCODE_GO_*` 环境变量），**不会下发到浏览器，也不会上传到任何第三方服务器**。
+- 除 OpenCode 官方接口外没有其它网络请求；无遥测。
+- 本地缓存文件：`$DSH_HOME/cache/dsh-opencode-go-usage/day-aggregates.v1.json`（只存日聚合）。
 
-Host 半侧按以下顺序解析 OpenCode Go API Key，**Key 不会返回给浏览器**：
+## 与其它插件的配合
 
-1. 环境变量 `DSH_OPENCODE_GO_ACCOUNT_*`（`oc_` 开头）或 `DSH_OPENCODE_GO_API_KEY`；
-2. `$DSH_HOME/.credentials.yaml` 中名称含 `OPENCODE…_ACCOUNT_` 的 ref，退而取第一个
-   `oc_sk_…`。
+- **推荐与 [`dsh-opencode-go`](https://www.npmjs.com/package/dsh-opencode-go) 一起使用**：
+  后者提供 DSH 的 OpenCode Go provider 与账号/Key 配置，本插件读取同一份凭据做只读统计。
+- 不硬依赖其它插件；与 `dsh-better-sidebar` 等 UI 插件可共存（本插件只占用
+  `settings.section`、`sidebar.footer.action`、`shell.overlay` 三个扩展点，不改动宿主 UI）。
+- 验证环境：DSH **0.2.2-rc.1**。DSH 升级后若设置页、侧栏按钮或浮层不显示，通常是 slot 契约变化，
+  按 [AGENTS.md](./AGENTS.md) 的验证流程排查。
 
-没有配置 OpenCode Go 时，页面会显示明确的错误提示。
+## 安装
 
-## 安装（已安装到当前 desktop profile）
-
-本机已经完成安装：profile 依赖 `dsh-opencode-go-usage: link:D:/code/dsh-plugin/dsh-opencode-go-usage`，
-并在 `~/.dsh/profiles/desktop/cordis.patch.yml` 末尾插入了挂载行。HMR 已确认插件生效，
-硬刷新页面即可看到「设置 → 用量统计」。源码目录为 `D:\code\dsh-plugin\dsh-opencode-go-usage`，
-维护约定见同目录的 `AGENTS.md`。
-
-手工安装步骤（换机器或重装时）：
+目前未发布到 npm，按源码方式以 profile `link:` 依赖安装：
 
 ```powershell
-# 1) 把本地目录加成 profile 依赖（pnpm 由 DSH 自带运行时提供）
-& "D:\program\DeepSeek Harness\resources\runtime\primary-runtime\dependencies\node\node.exe" `
-  "D:\program\DeepSeek Harness\resources\runtime\primary-runtime\dependencies\pnpm\bin\pnpm.cjs" `
-  add "link:D:\code\dsh-plugin\dsh-opencode-go-usage"
-
-# 2) 在 ~/.dsh/profiles/desktop/cordis.patch.yml 末尾追加挂载行
-#    - insert:
-#        - id: usage-stats
-#          name: 'dsh-opencode-go-usage'
-
-# 3) 硬刷新浏览器页面（Ctrl/Cmd+Shift+R），打开 设置 → 用量统计
+git clone https://github.com/Donotinvert/opencode-go-usage-stats.git
+# 记住克隆下来的绝对路径，例如 <repo>
+dsh plugin --profile <profile> add "link:<repo>"
 ```
 
-> 上述两步也可以用 DSH 的 `plugin_manager` 工具 `install_bundle`（目标填本目录绝对路径）
-> 自动完成；当前会话没有暴露该工具，因此这里记录手动步骤。
+> `dsh plugin` 会把剩余参数转发给 profile 目录里的 pnpm；也可以用 DSH 桌面版自带的
+> node + pnpm 手动执行 `pnpm add "link:<repo>"`，见 [AGENTS.md](./AGENTS.md)。
 
-## 限制
+随后在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 末尾追加挂载行：
 
-- 只统计 **OpenCode Console** 记录的流量；请求日志只有 30 天保留期，早于保留期的日期
-  显示 0。
-- Go 计划额度按美元计量（不同模型单价不同），本页展示 token 数量，额度消耗单列。
-- 页面文案暂为中文（用户环境为中文）；如需英文可后续补 locale 字典。
-- 首次安装/缓存为空时第一次打开仍需 4–12 秒；此后由磁盘缓存与后台预热保证秒开。
+```yaml
+- insert:
+    - id: usage-stats
+      name: "dsh-opencode-go-usage"
+```
 
-## 卸载
+硬刷新浏览器页面（Ctrl/Cmd+Shift+R）即可看到入口。修改 `index.js`（Host 半侧）后需要
+重启 DSH 桌面应用；只改 `client.js` 时硬刷新即可。
 
-1. 删除 `~/.dsh/profiles/desktop/cordis.patch.yml` 末尾的 `usage-stats` insert 行；
-2. 在 profile 目录执行 `pnpm remove dsh-opencode-go-usage`；
-3. 硬刷新页面。`D:\code\dsh-plugin\dsh-opencode-go-usage` 源码目录可保留或删除。
-   可选：删除 `$DSH_HOME/cache/dsh-opencode-go-usage/` 缓存目录。
+> 如果你在 DSH 桌面版（Electron）中使用，`dsh plugin` 命令可能不在 PATH 里；直接使用
+> 安装目录 `resources/runtime/primary-runtime/dependencies/` 下自带的 node/pnpm 即可。
 
-## 已验证 / 未验证
+## 注意事项
 
-- 已验证：Host 半侧真实 30 天数据端到端（`scripts/smoke.mjs`：约 11.4 亿 tokens / 2 个
-  有消耗的模型；首次全量约 4–12 秒，二次读取 0 秒、只命中磁盘缓存）；Host 路由
-  `/usage-stats/api/data` 已注册（未认证请求返回本插件的 403 JSON）；额度接口
-  `https://opencode.ai/zen/go/v1/usage` 真实返回并由 `parseQuota` 校验通过；客户端渲染用
-  `scripts/render-check.mjs` 验证（28 项断言：累计/今日两个汇总块、日均参考线、额度三进度条、
-  侧栏双半环、Top3+其他、图例、悬停明细、无 `<table>`、100 个柱段）。
-- 未验证：浏览器中的实际视觉效果、柱形悬停与点击、侧栏半环的真实绘制（当前会话没有已认证
-  页面的截图或浏览器控制能力）。重启 DSH 并硬刷新后请实际打开确认；如有报错把页面文字
-  发回即可排查。
+- 只统计 OpenCode Console 记录的 Go 计划流量；Console 请求日志保留 30 天，更早日期显示 0。
+- Go 额度以美元计量，不同模型单价不同，因此页面展示 token 数量与额度百分比两个维度。
+- 首次安装或缓存为空时第一次打开较慢（4–12 秒）；之后由磁盘缓存和后台预热保证秒开。
+- 页面文案目前为中文，主要针对深色主题设计。
+- 本项目与 OpenCode、DeepSeek 官方无隶属关系；Console 接口属于未公开文档的接口，
+  上游变更可能导致数据暂不可用，届时按 AGENTS.md 的接口说明调整。
 
-## 开发
+## 开发与测试
 
-- 修改 `client.js` 后，Client HMR 可按 mtime 重载 bundle，硬刷新页面即可；
-- 修改 `index.js`（Host 半侧）后需重启 DSH 桌面应用才会加载新代码；
-- `node scripts/smoke.mjs` 验证 Host 数据链路（真实接口 + 缓存断言）；
-- `node scripts/render-check.mjs` 在无浏览器、无独立 React 的环境下用最小 React 替身渲染
-  三个入口，检查柱状图结构、图例与无表格；真实视觉效果仍需浏览器确认。
+```powershell
+node --check index.js
+node --check client.js
+node scripts/smoke.mjs          # 真实 Console 数据 + 缓存断言
+node scripts/render-check.mjs   # 无浏览器、最小 React 替身的渲染断言
+```
+
+工程约定、数据口径、DSH 插件契约、缓存/验证细节与排障步骤见 [AGENTS.md](./AGENTS.md)。
+
+## License
+
+[MIT](./LICENSE)

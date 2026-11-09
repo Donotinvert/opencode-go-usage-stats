@@ -45,6 +45,7 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - 侧栏按钮悬停：右侧弹出 Codex 风格紧凑文本卡 `QuotaHoverCard`（232px，**不画条形图**）：一行 `Usage source: OpenCode Go`，三行 `5-hour limit / Weekly limit / Monthly limit` 右侧 `X% left`（剩余 = 100 − 已用%），分隔线后 `管理用量` 打开浮层。不要恢复 `title` 文本 tooltip；卡片用 fixed 定位在按钮右侧（`left = rect.right + 10`，`bottom` 对齐按钮底），以 `data-open` 控制显隐，便于静态渲染断言。
 - 组件结构：`DailyChart`（纯数据 → 柱/轴/明细/图例）+ `UsageBody`（汇总块/口径/图表/告警/额度）+ `QuotaHoverCard`（侧栏悬停卡）；`data.models` 字段是 `totalTokens/...`，`row.byModel` 桶字段是 `total/input/output/cacheRead`，两个访问器 `metricOfModel` 与 `metricOf` 不可混用。数据来源脚注已删除，口径说明改在分项 `title` 提示里。
 - 渲染验证：`node scripts/render-check.mjs`。本机没有可被 Node import 的独立 React（客户端 bundle 从模块表取 React），脚本内自带最小 React 替身（createElement + 4 个 hook）再序列化元素树；断言不得含 `<table>`、必须有两个汇总块与 `dsh-us-avg`、必须有 `dsh-us-seg` 与 Top3+其他、必须有额度三进度条与侧栏四条 `<path>` 半环。fixture 窗口以运行当天 UTC 结尾，日期断言不写死。
+- README 的截图位于 `docs/screenshots/`（`panel.png` 浮层面板、`quota.png` 额度区）；入口、配色或布局变化后同步替换截图，并在 README 保持「功能 / 数据来源与隐私 / 与其它插件配合 / 安装 / 注意事项 / 开发测试」结构。
 
 ### 加载性能与缓存（0.3.0 起，勿破坏）
 
@@ -60,8 +61,8 @@ DSH 本地插件「用量统计」：设置页展示 OpenCode Go 最近 30 天�
 - API Key 只允许 Host 侧读取；禁止写入源码、日志、页面响应或提交记录。
 - 只改本目录与 profile 中本插件相关行（依赖、`pnpm-lock.yaml`、`cordis.patch.yml` 的 `usage-stats` insert）；其它行不动。
 - 本目录是**独立 git 仓库**（remote: `https://github.com/Donotinvert/opencode-go-usage-stats.git`），
-  已通过 `D:\code\.git\info\exclude` 对 `code` 仓库隐藏（本地生效，不随仓库同步）；不要在 `code`
-  仓库提交本目录，也不要删除这条排除规则（否则 `code` 的 `git status` 会把整个插件目录当未跟踪内容）。
+  如它被放在另一个工作区目录下，可用该工作区的本地 `.git/info/exclude` 把本目录排除
+  （排除只在本机生效，不随仓库同步）；不要在父级工作区仓库提交本目录。
 - 推送本仓库只提交本目录内容；profile 与 `~/.dsh` 下的配置不在本仓库内。
 - 验证分三层，不得用前两层推断第三层：
   1. `node --check index.js`、`node --check client.js`、`node scripts/smoke.mjs`（真实接口）；
